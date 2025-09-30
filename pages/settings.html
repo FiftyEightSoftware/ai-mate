@@ -1,0 +1,115 @@
+<div class="list">
+  <div class="list-item">
+    <div>
+      <div class="title">Account</div>
+      <div class="subtitle">Sign in to sync data</div>
+    </div>
+    <button class="btn">Sign In</button>
+  </div>
+  <div class="list-item">
+    <div>
+      <div class="title">Theme</div>
+      <div class="subtitle" id="theme-status">Auto (follows system)</div>
+    </div>
+    <button class="btn" data-action="toggle-theme">Toggle</button>
+  </div>
+  <div class="list-item">
+    <div>
+      <div class="title">Notifications</div>
+      <div class="subtitle">Enable push notifications</div>
+    </div>
+    <button class="btn" id="enable-notifications">Enable</button>
+  </div>
+  <div class="list-item">
+    <div>
+      <div class="title">Offline Mode</div>
+      <div class="subtitle">Cache data for offline access</div>
+    </div>
+    <span class="badge" style="background: var(--brand);">Active</span>
+  </div>
+</div>
+
+<div class="list" style="margin-top: 16px;">
+  <div class="list-item">
+    <div>
+      <div class="title">Export Data</div>
+      <div class="subtitle">Download your data as CSV</div>
+    </div>
+    <button class="btn" id="export-data">Export</button>
+  </div>
+  <div class="list-item">
+    <div>
+      <div class="title">Clear Cache</div>
+      <div class="subtitle">Free up storage space</div>
+    </div>
+    <button class="btn" id="clear-cache">Clear</button>
+  </div>
+</div>
+
+<div class="list" style="margin-top: 16px;">
+  <div class="list-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+    <div class="title">About AI Mate</div>
+    <div class="subtitle">Version 1.0.0</div>
+    <div class="subtitle" style="font-size: 12px;">Your intelligent business assistant for managing jobs, clients, and invoices.</div>
+  </div>
+</div>
+
+<script>
+  // Theme toggle with status update
+  const themeBtn = document.querySelector('[data-action="toggle-theme"]');
+  const themeStatus = document.getElementById('theme-status');
+  
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function() {
+      const themes = {
+        'auto': 'Auto (follows system)',
+        'light': 'Light mode',
+        'dark': 'Dark mode'
+      };
+      setTimeout(() => {
+        const currentTheme = window.aiMate?.themeManager?.currentTheme || 'auto';
+        themeStatus.textContent = themes[currentTheme] || themes.auto;
+      }, 100);
+    });
+  }
+  
+  // Notifications
+  document.getElementById('enable-notifications')?.addEventListener('click', function() {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          window.aiMate?.toast.success('Notifications enabled!');
+          this.textContent = 'Enabled';
+          this.disabled = true;
+        } else {
+          window.aiMate?.toast.error('Notification permission denied');
+        }
+      });
+    } else {
+      window.aiMate?.toast.error('Notifications not supported');
+    }
+  });
+  
+  // Export data
+  document.getElementById('export-data')?.addEventListener('click', function() {
+    window.aiMate?.toast.info('Preparing export...');
+    setTimeout(() => {
+      window.aiMate?.toast.success('Data export complete!');
+    }, 1500);
+  });
+  
+  // Clear cache
+  document.getElementById('clear-cache')?.addEventListener('click', function() {
+    if (confirm('Clear all cached data? This cannot be undone.')) {
+      if ('caches' in window) {
+        caches.keys().then(keys => {
+          return Promise.all(keys.map(key => caches.delete(key)));
+        }).then(() => {
+          window.aiMate?.toast.success('Cache cleared!');
+        });
+      } else {
+        window.aiMate?.toast.success('Cache cleared!');
+      }
+    }
+  });
+</script>

@@ -1,0 +1,318 @@
+@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="toolbar">
+        <h1>@Title</h1>
+    </header>
+
+    <main id="content" class="content @($"dir-{Dir}")">
+        <div class="page" @key="NavigationManager.Uri">
+            @Body
+        </div>
+    </main>
+
+    <nav class="bottom-nav">
+        <NavLink class="tab" href="/dashboard" @onclick='@(() => SetTitle("Dashboard"))'>📊 <span>Dashboard</span></NavLink>
+        <NavLink class="tab" href="/" Match="NavLinkMatch.All" @onclick='@(() => SetTitle("Home"))'>🏠 <span>Home</span></NavLink>
+        <NavLink class="tab" href="/jobs" @onclick='@(() => SetTitle("Jobs"))'>🛠️ <span>Jobs</span></NavLink>
+        <NavLink class="tab" href="/assistant" @onclick='@(() => SetTitle("Mate"))'>🎙️ <span>Mate</span></NavLink>
+        <NavLink class="tab" href="/clients" @onclick='@(() => SetTitle("Clients"))'>👤 <span>Clients</span></NavLink>
+        <NavLink class="tab" href="/payments" @onclick='@(() => SetTitle("Payments"))'>💳 <span>Payments</span></NavLink>
+        <NavLink class="tab" href="/settings" @onclick='@(() => SetTitle("Settings"))'>⚙️ <span>Settings</span></NavLink>
+    </nav>
+
+    <div class="floating-mic-wrap">
+        <button class="floating-mic" @onclick="ToggleMic" aria-pressed="@Voice.IsListening" title="@(_micLabel)">
+            @(Voice.IsListening ? "🟢" : "⚪️") 🎤
+        </button>
+        <button class="floating-mic-menu" @onclick="ToggleHistory" aria-expanded="@_showHistory" title="Show voice history">▾</button>
+        @if (_showHistory)
+        {
+            <div class="voice-history" role="menu">
+                <div class="head">
+                    <div class="label">Voice History</div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <input id="menu-sim-input" class="form-control" placeholder="Simulate phrase" @bind="_menuSimPhrase" style="min-width:140px;" />
+                        @if (_savedPhrases.Count > 0)
+                        {
+                            <select class="form-control" @onchange="OnPhraseSelect" style="min-width:160px;">
+                                <option value="">Saved phrases…</option>
+                                @foreach (var p in _savedPhrases)
+                                {
+                                    <option value="@p">@p</option>
+                                }
+                            </select>
+                        }
+                        <button class="clear" @onclick="ClearSimulateInput" title="Clear input">✖︎</button>
+                        <label style="display:flex; gap:4px; align-items:center; font-size:12px; color: var(--muted);"><input type="checkbox" @bind="_menuSimExecute" /> exec</label>
+                        <button class="clear" @onclick="RunMenuSimulate" title="Simulate">Run</button>
+                        <button class="clear" @onclick="ClearHistory" title="Clear history">Clear</button>
+                    </div>
+                </div>
+                @if (Voice.History.Count == 0)
+                {
+                    <div class="item empty">No history yet</div>
+                }
+                else
+                {
+                    @foreach (var h in Voice.History)
+                    {
+                        <button class="item btn-item" @onclick="(() => RunHistoryAction(h.ActionKey))" disabled="@(string.IsNullOrWhiteSpace(h.ActionKey))">
+                            <div class="trans"><strong>Heard:</strong> @h.Transcript</div>
+                            <div class="act"><strong>Action:</strong> @(string.IsNullOrWhiteSpace(h.ActionName) ? "No action matched" : h.ActionName) @if(Voice.IsPrivileged(h.ActionKey)){<span title="Privileged" style="margin-left:6px;">🛡️</span>}</div>
+                            <div class="time">@h.At.LocalDateTime.ToShortTimeString()</div>
+                        </button>
+                    }
+                }
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Voice.PendingActionKey))
+    {
+        <div style="position:fixed; inset:0; background: rgba(0,0,0,0.45); z-index:100; display:flex; align-items:center; justify-content:center;">
+            <div style="background: var(--card); color: var(--text); border: 1px solid rgba(200,121,62,0.28); border-radius: 12px; box-shadow: 0 16px 36px rgba(0,0,0,0.45); width:min(92vw,520px); padding:16px;">
+                <div class="title" style="margin-bottom:6px;">Confirm Action</div>
+                <div class="subtitle" style="margin-bottom:10px;">@Voice.PendingReason @if(Voice.IsPrivileged(Voice.PendingActionKey)){<span style="margin-left:8px;">🛡️ Privileged</span>}</div>
+                <div style="margin-bottom:10px;">Action: <strong>@Voice.PendingActionName</strong></div>
+                <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-top:8px;">
+                    <label style="display:flex; gap:6px; align-items:center; font-size:12px; color: var(--muted);">
+                        <input type="checkbox" @bind="_confirmExtend" /> Always allow for 5 minutes
+                    </label>
+                    <label style="display:flex; gap:6px; align-items:center; font-size:12px; color: var(--muted);">
+                        <input type="checkbox" @bind="_confirmRemember" /> Remember for this action (session)
+                    </label>
+                    <div style="display:flex; gap:8px; margin-left:auto;">
+                        <button class="clear" @onclick="CancelPending" style="border:1px solid rgba(255,255,255,0.2); border-radius:8px; padding:6px 10px; background:transparent; color:var(--text);">Cancel</button>
+                        <button class="btn" @onclick="ConfirmPending">Proceed</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Voice.LastTranscript) || !string.IsNullOrWhiteSpace(Voice.LastMatchedAction))
+    {
+        <div class="voice-chip" role="status" aria-live="polite">
+            <div class="line"><strong>Heard:</strong> @Voice.LastTranscript</div>
+            @if (!string.IsNullOrWhiteSpace(Voice.LastMatchedAction))
+            {
+                <div class="line"><strong>Action:</strong> @Voice.LastMatchedAction</div>
+            }
+            else
+            {
+                <div class="line"><strong>Action:</strong> No action matched</div>
+            }
+            <div style="margin-top:6px; display:flex; gap:6px; justify-content:flex-end;">
+                <button class="clear" @onclick="CopyTranscript" title="Copy transcript">📋</button>
+                <button class="clear" @onclick="DismissChip" title="Dismiss">✖︎</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Inject] Services.VoiceService Voice { get; set; } = default!;
+    [Inject] Services.VoiceStorageService Storage { get; set; } = default!;
+    [Inject] IJSRuntime JS { get; set; } = default!;
+    private string Title { get; set; } = "Home";
+    private string Dir { get; set; } = "forward";
+    private readonly string[] TabOrder = new[]{"/dashboard", "/", "/jobs", "/assistant", "/clients", "/payments", "/settings"};
+    private int lastIndex = 0;
+    protected override void OnParametersSet()
+    {
+        Title = NavigationManager.Uri.Contains("dashboard") ? "Dashboard"
+            : NavigationManager.Uri.Contains("jobs") ? "Jobs"
+            : NavigationManager.Uri.Contains("assistant") ? "Mate"
+            : NavigationManager.Uri.Contains("clients") ? "Clients"
+            : NavigationManager.Uri.Contains("payments") ? "Payments"
+            : NavigationManager.Uri.Contains("settings") ? "Settings"
+            : "Home";
+    }
+
+    [Inject] NavigationManager NavigationManager { get; set; } = default!;
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnNavChanged;
+        lastIndex = IndexFor(NavigationManager.Uri);
+        Voice.FeedbackChanged += OnFeedbackChanged;
+        Voice.PendingChanged += OnPendingChanged;
+    }
+
+    void OnNavChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        var idx = IndexFor(e.Location);
+        Dir = idx >= lastIndex ? "forward" : "back";
+        lastIndex = idx;
+        Title = NavigationManager.Uri.Contains("jobs") ? "Jobs"
+            : NavigationManager.Uri.Contains("assistant") ? "Mate"
+            : NavigationManager.Uri.Contains("clients") ? "Clients"
+            : NavigationManager.Uri.Contains("settings") ? "Settings"
+            : "Home";
+        InvokeAsync(StateHasChanged);
+    }
+
+    int IndexFor(string uri)
+    {
+        try
+        {
+            var path = new Uri(uri).AbsolutePath;
+            for (var i = 0; i < TabOrder.Length; i++) if (TabOrder[i] == path) return i;
+            return 0;
+        }
+        catch { return 0; }
+    }
+
+    void SetTitle(string t) => Title = t;
+
+    private string _micLabel => Voice.IsListening ? "Stop voice listening" : "Start voice listening";
+    private async Task ToggleMic()
+    {
+        if (Voice.IsListening)
+        {
+            await Voice.StopAsync();
+        }
+        else
+        {
+            await Voice.InitializeAsync();
+            await Voice.StartAsync();
+        }
+        StateHasChanged();
+    }
+
+    private bool _showHistory = false;
+    private async void ToggleHistory()
+    {
+        _showHistory = !_showHistory;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "aimate_voice_history_open", _showHistory ? "1" : "0"); } catch { }
+    }
+
+    private void ClearHistory()
+    {
+        Voice.ClearHistory();
+        if (_toastsEnabled) { try { JS.InvokeVoidAsync("voice.toast", "History cleared"); } catch { } }
+    }
+
+    private async Task RunHistoryAction(string? actionKey)
+    {
+        await Voice.RunActionAsync(actionKey);
+        _showHistory = false;
+        StateHasChanged();
+    }
+
+    private string? _menuSimPhrase;
+    private bool _menuSimExecute = true;
+    private async Task RunMenuSimulate()
+    {
+        var p = (_menuSimPhrase ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(p)) return;
+        await Voice.SimulateRecognitionAsync(p, _menuSimExecute);
+        if (_toastsEnabled) { try { await JS.InvokeVoidAsync("voice.toast", "Simulated"); } catch { } }
+    }
+
+    private void OnPhraseSelect(ChangeEventArgs e)
+    {
+        var v = Convert.ToString(e.Value) ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(v)) _menuSimPhrase = v;
+    }
+
+    private void ClearSimulateInput()
+    {
+        _menuSimPhrase = string.Empty;
+    }
+
+    private CancellationTokenSource? _chipCts;
+    private bool _toastsEnabled = true;
+    private List<string> _savedPhrases = new();
+    private void OnFeedbackChanged()
+    {
+        InvokeAsync(StateHasChanged);
+        _chipCts?.Cancel();
+        _chipCts = new CancellationTokenSource();
+        _ = AutoHideChipAsync(_chipCts.Token);
+    }
+
+    private void OnPendingChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task AutoHideChipAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(3000, token);
+            if (!token.IsCancellationRequested)
+            {
+                Voice.ClearFeedback();
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnNavChanged;
+        Voice.FeedbackChanged -= OnFeedbackChanged;
+        Voice.PendingChanged -= OnPendingChanged;
+        _chipCts?.Cancel();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var v = await JS.InvokeAsync<string?>("localStorage.getItem", "aimate_voice_history_open");
+                _showHistory = v == "1";
+                var sim = await JS.InvokeAsync<string?>("localStorage.getItem", "aimate_voice_history_simulate");
+                if (!string.IsNullOrWhiteSpace(sim))
+                {
+                    _menuSimPhrase = sim;
+                    await JS.InvokeVoidAsync("localStorage.removeItem", "aimate_voice_history_simulate");
+                }
+                try
+                {
+                    var prompts = await Storage.GetAsync();
+                    _savedPhrases = prompts.Where(p => !string.IsNullOrWhiteSpace(p.Phrase)).Select(p => p.Phrase!).Distinct(StringComparer.OrdinalIgnoreCase).Take(100).ToList();
+                    _toastsEnabled = await Storage.GetToastsEnabledAsync(true);
+                }
+                catch { }
+                StateHasChanged();
+            }
+            catch { }
+        }
+    }
+
+    private void DismissChip()
+    {
+        Voice.ClearFeedback();
+    }
+
+    private async Task CopyTranscript()
+    {
+        var t = Voice.LastTranscript ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(t)) return;
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("voice.copyText", t);
+            if (_toastsEnabled && ok) await JS.InvokeVoidAsync("voice.toast", "Transcript copied");
+        }
+        catch { }
+    }
+
+    private bool _confirmExtend = false;
+    private bool _confirmRemember = false;
+    private async Task ConfirmPending()
+    {
+        await Voice.ConfirmPendingAsync(_confirmExtend, _confirmRemember);
+        _confirmExtend = _confirmRemember = false;
+        if (_toastsEnabled) { try { await JS.InvokeVoidAsync("voice.toast", "Action confirmed"); } catch { } }
+    }
+
+    private void CancelPending()
+    {
+        Voice.CancelPending();
+    }
+}

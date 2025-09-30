@@ -1,0 +1,4 @@
+Initial Internal Test release of AI Mate (Flutter WebView wrapper).
+Loads the production PWA at https://ai-mate.nickphinesme.com.
+Includes pull-to-refresh and a loading indicator.
+No native permissions requested in this build.

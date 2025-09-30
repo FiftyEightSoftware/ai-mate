@@ -1,0 +1,13 @@
+{
+  "routes": [
+    {
+      "route": "/api/*",
+      "allowedRoles": ["anonymous"],
+      "rewrite": "__BACKEND_URL__/api/{*path}"
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["*.{css,js,png,jpg,gif,svg,ico}"]
+  }
+}

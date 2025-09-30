@@ -1,0 +1,30 @@
+# Node/Vite
+node_modules/
+.dist/
+.vite/
+
+# Python
+__pycache__/
+*.pyc
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins-dependencies
+build/
+
+# Android/Gradle (root-level ignores)
+**/.gradle/
+**/local.properties
+**/*.keystore
+**/*.jks
+
+# Play service account (keep private)
+play-service-account.json
+key.properties
+
+# macOS
+.DS_Store
+
+# Env files (do not commit secrets)
+.env
+.env.*.local

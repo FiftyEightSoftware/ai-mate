@@ -1,0 +1,127 @@
+@page "/invoices/{Id}"
+@inject ai_mate_blazor.Services.ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h3>Invoice Detail</h3>
+
+@if (_loading)
+{
+    <div class="empty">Loading...</div>
+}
+else if (_error is not null)
+{
+    <div class="list-item" style="background:#2a0e0e; border:1px solid #7a3030; color:#ffdada;">@_error</div>
+}
+else if (_item is null)
+{
+    <div class="empty">Invoice not found</div>
+}
+else
+{
+    <div class="list">
+        <div class="list-item" style="gap:10px; align-items:center;">
+            <div style="flex:1;">
+                <div class="title">@_item.customer</div>
+                <div class="subtitle">ID: <code>@_item.id</code></div>
+            </div>
+            <div style="font-size:20px; font-weight:700;">@_item.amount.ToString("C")</div>
+        </div>
+        <div class="list-item">
+            <div style="flex:1;">
+                <div class="title">Status</div>
+                <div class="subtitle">@(_item.status ?? "")</div>
+            </div>
+            <div style="flex:1;">
+                <div class="title">Issue Date</div>
+                <div class="subtitle">@(_item.issueDate?.ToShortDateString() ?? "—")</div>
+            </div>
+            <div style="flex:1;">
+                <div class="title">Due Date</div>
+                <div class="subtitle">@(_item.dueDate?.ToShortDateString() ?? "—")</div>
+        </div>
+    </div>
+    <div class="list-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div class="title">Add Payment</div>
+        <div class="subtitle">Record a payment and mark the invoice as paid</div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="number" step="0.01" min="0" class="form-control" style="min-width:120px;" placeholder="Amount" @bind="_paymentAmountStr" />
+            <input type="date" class="form-control" style="min-width:180px;" @bind-value="_paymentDate" @bind-value:format="yyyy-MM-dd" />
+            <button class="btn" @onclick="AddPayment">Add Payment</button>
+        </div>
+    </div>
+    <div class="list-item" style="justify-content:flex-end; gap:8px;">
+        <button class="btn" @onclick="GoBack">← Back</button>
+    </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private ai_mate_blazor.Services.ApiClient.InvoiceDto? _item;
+    private bool _loading = true;
+    private string? _error;
+    private DateTime? _paymentDate = DateTime.Today;
+    private string? _paymentAmountStr;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        _error = null; _item = null; _loading = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(Id)) { _error = "Missing invoice id"; return; }
+            _item = await Api.GetInvoiceAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Nav.NavigateTo("/invoices");
+    }
+
+    private async Task MarkPaid()
+    {
+        if (_item is null) return;
+        var ok = await Api.MarkInvoicePaidAsync(_item.id, _paymentDate);
+        if (ok)
+        {
+            await LoadAsync();
+            try { await JS.InvokeVoidAsync("voice.toast", "Marked as paid"); } catch { }
+        }
+        else
+        {
+            _error = "Failed to mark as paid";
+            try { await JS.InvokeVoidAsync("voice.toast", _error); } catch { }
+        }
+    }
+
+    private async Task AddPayment()
+    {
+        if (_item is null) return;
+        if (!decimal.TryParse(_paymentAmountStr, out var amt) || amt <= 0) { _error = "Enter a valid amount"; try { await JS.InvokeVoidAsync("voice.toast", _error); } catch { } return; }
+        var ok = await Api.AddPaymentAsync(_item.id, amt, _paymentDate ?? DateTime.Today);
+        if (ok)
+        {
+            await LoadAsync();
+            try { await JS.InvokeVoidAsync("voice.toast", "Payment added"); } catch { }
+        }
+        else
+        {
+            _error = "Failed to add payment";
+            try { await JS.InvokeVoidAsync("voice.toast", _error); } catch { }
+        }
+    }
+}

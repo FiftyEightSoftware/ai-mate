@@ -1,0 +1,143 @@
+@page "/invoices"
+@using ai_mate_blazor.Services
+@inject ai_mate_blazor.Services.ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h3>Invoices</h3>
+
+<div class="list" style="margin-bottom:10px;">
+    <div class="list-item" style="gap:10px; align-items:center; flex-wrap:wrap;">
+        <div class="title" style="margin-right:auto;">Browse</div>
+        <label class="subtitle" style="display:flex; gap:6px; align-items:center;">
+            <span>Status</span>
+            <select class="form-control" style="min-width:140px;" @onchange="OnStatusChanged">
+                <option value="">All</option>
+                <option value="unpaid" selected="@(_status == "unpaid")">Unpaid</option>
+                <option value="overdue" selected="@(_status == "overdue")">Overdue</option>
+                <option value="paid" selected="@(_status == "paid")">Paid</option>
+            </select>
+        </label>
+        <button class="btn" @onclick="Refresh">↻ Refresh</button>
+        <button class="btn" @onclick="ExportCsv">⬇️ CSV</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="empty">Loading...</div>
+}
+else if (_error is not null)
+{
+    <div class="list-item" style="background:#2a0e0e; border:1px solid #7a3030; color:#ffdada;">@_error</div>
+}
+else if (_items is null || _items.Count == 0)
+{
+    <div class="empty">No invoices found</div>
+}
+else
+{
+    @foreach (var inv in _items)
+    {
+        <button class="list-item" style="gap:10px; align-items:center; text-align:left; background:transparent; border:none;" @onclick="(() => Open(inv.id))">
+            <div style="flex:1;">
+                <div class="title">@inv.customer</div>
+                <div class="subtitle">Amount: @inv.amount.ToString("C") • @((inv.dueDate.HasValue ? $"Due {inv.dueDate.Value.ToShortDateString()}" : "No due")) • <code>@(string.IsNullOrWhiteSpace(inv.status) ? "" : inv.status)</code></div>
+            </div>
+            <div>@(inv.paidDate.HasValue ? "Paid" : (inv.dueDate.HasValue && inv.dueDate.Value.Date < DateTime.Today ? "Overdue" : "Open"))</div>
+        </button>
+    }
+}
+
+<div class="list" style="margin-top:16px;">
+    <div class="list-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div>
+            <div class="title">Import Invoices (JSON)</div>
+            <div class="subtitle">Paste a JSON array of invoices (id, customer, amount, status, issueDate, dueDate, paidDate)</div>
+        </div>
+        <textarea class="form-control" style="min-height:120px; background: var(--card); color: var(--text);" @bind="_importJson" placeholder='[{"id":"...","customer":"Acme","amount":123.45,"status":"unpaid","issueDate":"2025-01-02","dueDate":"2025-01-12"}]'></textarea>
+        <div style="display:flex; gap:8px;">
+            <button class="btn" @onclick="DoImport">Import</button>
+            @if (!string.IsNullOrEmpty(_info))
+            {
+                <span class="subtitle">@_info</span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ApiClient.InvoiceDto>? _items;
+    private bool _loading = true;
+    private string? _error;
+    private string? _status;
+    private string? _importJson;
+    private string? _info;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        try
+        {
+            _loading = true;
+            _items = await Api.GetInvoicesAsync(_status);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        _status = Convert.ToString(e.Value);
+        await Refresh();
+    }
+
+    private void Open(string id)
+    {
+        Nav.NavigateTo($"/invoices/{Uri.EscapeDataString(id)}");
+    }
+
+    private async Task ExportCsv()
+    {
+        if (_items is null || _items.Count == 0) return;
+        var rows = new List<string>();
+        rows.Add("Id,Customer,Amount,IssueDate,DueDate,PaidDate,Status");
+        foreach (var i in _items)
+        {
+            var id = (i.id ?? string.Empty).Replace("\"", "\"\"");
+            var cust = (i.customer ?? string.Empty).Replace("\"", "\"\"");
+            var status = (i.status ?? string.Empty).Replace("\"", "\"\"");
+            rows.Add($"\"{id}\",\"{cust}\",{i.amount},{(i.issueDate.HasValue ? i.issueDate.Value.ToString("yyyy-MM-dd") : "")},{(i.dueDate.HasValue ? i.dueDate.Value.ToString("yyyy-MM-dd") : "")},{(i.paidDate.HasValue ? i.paidDate.Value.ToString("yyyy-MM-dd") : "")},\"{status}\"");
+        }
+        var csv = string.Join("\n", rows);
+        await JS.InvokeVoidAsync("voice.downloadFile", $"invoices_{DateTime.Now:yyyyMMdd}.csv", csv, "text/csv");
+    }
+    private async Task DoImport()
+    {
+        _info = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_importJson)) return;
+            var items = System.Text.Json.JsonSerializer.Deserialize<List<ApiClient.InvoiceDto>>(_importJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            if (items is null || items.Count == 0) { _info = "No items"; return; }
+            var ok = await Api.ImportInvoicesAsync(items);
+            _info = ok ? $"Imported {items.Count} invoice(s)" : "Import failed";
+            await Refresh();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _info = ex.Message;
+        }
+    }
+}

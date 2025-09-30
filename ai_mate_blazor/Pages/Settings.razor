@@ -1,0 +1,509 @@
+@page "/settings"
+@using ai_mate_blazor.Models
+@inject ai_mate_blazor.Services.VoiceService Voice
+@inject ai_mate_blazor.Services.VoiceStorageService VoiceStorage
+@inject ai_mate_blazor.Services.VoiceSecurityService VoiceSecurity
+@inject ai_mate_blazor.Services.HmrcValidationService HmrcValidation
+<h3>Settings</h3>
+<div class="list">
+    <div class="list-item">
+        <div>
+            <div class="title">Account</div>
+            <div class="subtitle">Sign in to sync data</div>
+        </div>
+        <button class="btn">Sign In</button>
+    </div>
+    <div class="list-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div>
+            <div class="title">Tax Registration Details</div>
+            <div class="subtitle">Your VAT and HMRC Government Gateway information (encrypted)</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+            <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+                    <label for="vat-settings-input" style="font-weight:500;">VAT Registration Number</label>
+                    <button class="btn" @onclick="ToggleVatVisibility" style="padding:4px 8px; font-size:0.85em;">
+                        @(_showFullVat ? "🔒 Hide" : "👁️ Show")
+                    </button>
+                </div>
+                <input 
+                    id="vat-settings-input"
+                    class="form-control" 
+                    type="@(_showFullVat ? "text" : "password")"
+                    style="width:100%; background: var(--card); color: var(--text); border: 1px solid @GetVatBorderColor();" 
+                    placeholder="e.g., GB123456789" 
+                    @bind="VatRegistrationId"
+                    @bind:event="oninput"
+                    @onblur="ValidateVatOnBlur" />
+                @if (_vatValidation == ValidationState.Valid)
+                {
+                    <div style="color: #4CAF50; font-size: 0.85em;">✓ Valid format</div>
+                }
+                else if (_vatValidation == ValidationState.Invalid && !string.IsNullOrWhiteSpace(_vatError))
+                {
+                    <div style="color: #ff6b6b; font-size: 0.85em;">@_vatError</div>
+                }
+            </div>
+            <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+                    <label for="hmrc-settings-input" style="font-weight:500;">Government Gateway HMRC ID</label>
+                    <button class="btn" @onclick="ToggleHmrcVisibility" style="padding:4px 8px; font-size:0.85em;">
+                        @(_showFullHmrc ? "🔒 Hide" : "👁️ Show")
+                    </button>
+                </div>
+                <input 
+                    id="hmrc-settings-input"
+                    class="form-control" 
+                    type="@(_showFullHmrc ? "text" : "password")"
+                    style="width:100%; background: var(--card); color: var(--text); border: 1px solid @GetHmrcBorderColor();" 
+                    placeholder="Your HMRC Gateway user ID" 
+                    @bind="HmrcGatewayId"
+                    @bind:event="oninput"
+                    @onblur="ValidateHmrcOnBlur" />
+                @if (_hmrcValidation == ValidationState.Valid)
+                {
+                    <div style="color: #4CAF50; font-size: 0.85em;">✓ Valid format</div>
+                }
+                else if (_hmrcValidation == ValidationState.Invalid && !string.IsNullOrWhiteSpace(_hmrcError))
+                {
+                    <div style="color: #ff6b6b; font-size: 0.85em;">@_hmrcError</div>
+                }
+            </div>
+            <button class="btn" @onclick="SaveTaxDetails">Save Tax Details</button>
+            @if (!string.IsNullOrWhiteSpace(TaxDetailsMessage))
+            {
+                <div style="padding:8px; background:#11321a; border:1px solid #2e7a4b; color:#d6ffea; border-radius:4px; font-size:0.9em;">
+                    @TaxDetailsMessage
+                </div>
+            }
+            @if (_taxAudit?.Count > 0)
+            {
+                <details style="margin-top:8px;">
+                    <summary style="cursor:pointer; color:var(--muted); font-size:0.9em;">View Audit Trail (@_taxAudit.Count entries)</summary>
+                    <div style="margin-top:8px; max-height:200px; overflow-y:auto;">
+                        @foreach (var entry in _taxAudit.Take(10))
+                        {
+                            <div style="padding:6px; margin-bottom:4px; background:var(--card); border:1px solid var(--border); border-radius:4px; font-size:0.85em;">
+                                <div><strong>@entry.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</strong></div>
+                                <div>@entry.Action</div>
+                                @if (entry.VatChanged)
+                                {
+                                    <div style="color:var(--muted);">VAT: @MaskValue(entry.OldVat) → @MaskValue(entry.NewVat)</div>
+                                }
+                                @if (entry.HmrcChanged)
+                                {
+                                    <div style="color:var(--muted);">HMRC: @MaskValue(entry.OldHmrc) → @MaskValue(entry.NewHmrc)</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+    </div>
+    <div class="list-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div>
+            <div class="title">Business Profiles</div>
+            <div class="subtitle">Manage multiple businesses (Coming Soon)</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            @if (_businessProfiles?.Count > 0)
+            {
+                <div style="color:var(--muted); font-size:0.9em;">
+                    Currently configured: @_businessProfiles.Count profile(s)
+                </div>
+                @foreach (var profile in _businessProfiles)
+                {
+                    <div style="padding:8px; background:var(--card); border:1px solid var(--border); border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div style="font-weight:500;">@profile.Name</div>
+                            @if (!string.IsNullOrWhiteSpace(profile.VatRegistrationId))
+                            {
+                                <div style="font-size:0.85em; color:var(--muted);">VAT: @MaskValue(profile.VatRegistrationId)</div>
+                            }
+                        </div>
+                        @if (profile.IsActive)
+                        {
+                            <span style="padding:4px 8px; background:#4CAF50; color:white; border-radius:4px; font-size:0.8em;">Active</span>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div style="color:var(--muted); font-size:0.9em;">
+                    Multi-profile support will allow you to manage tax details for multiple businesses.
+                </div>
+            }
+        </div>
+    </div>
+    <div class="list-item">
+        <div>
+            <div class="title">Theme</div>
+            <div class="subtitle">Light / Dark</div>
+        </div>
+        <button class="btn">Toggle</button>
+    </div>
+    <div class="list-item">
+        <div>
+            <div class="title">Voice Prompts</div>
+            <div class="subtitle">Record phrases like “Create invoice”, “Show payments”, etc.</div>
+        </div>
+        <NavLink class="btn" href="/voice-setup">Configure</NavLink>
+    </div>
+    <div class="list-item" style="flex-wrap:wrap; gap:12px; align-items:center;">
+        <div style="min-width:220px;">
+            <div class="title">Voice History Size</div>
+            <div class="subtitle">Number of recent recognitions to keep (0–50). Current: <strong>@HistoryMaxVal</strong></div>
+        </div>
+        <input type="range" min="0" max="50" value="@HistoryMaxVal" @oninput="OnSliderChanged" style="flex:1; min-width:200px;" />
+        <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn" @onclick="SaveHistoryMax">Save</button>
+            <button class="btn" @onclick="ResetHistoryMax" title="Reset to default (10)">Reset</button>
+        </div>
+    </div>
+    <div class="list-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div>
+            <div class="title">Voice Data Backup</div>
+            <div class="subtitle">Export or import your voice prompts, history, and settings</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn" @onclick="ExportData">Export</button>
+            <button class="btn" @onclick="ImportData">Import</button>
+        </div>
+        <textarea class="form-control" style="min-height:140px; background: var(--card); color: var(--text);" placeholder="Exported JSON will appear here, or paste JSON to import" @bind="TransferJson"></textarea>
+    </div>
+    <div class="list-item" style="align-items:center; gap:12px;">
+        <div style="flex:1;">
+            <div class="title">Toasts</div>
+            <div class="subtitle">Show small pop-up confirmations (e.g., Simulated, History cleared)</div>
+        </div>
+        <label style="display:flex; gap:8px; align-items:center;">
+            <input type="checkbox" @bind="ToastsEnabled" /> Enable
+        </label>
+        <button class="btn" @onclick="SaveToasts">Save</button>
+    </div>
+    <div class="list-item" style="align-items:center; gap:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:220px;">
+            <div class="title">Security Passphrase</div>
+            <div class="subtitle">Required phrase for privileged actions (optional). Example: <code>mate secure</code></div>
+        </div>
+        <input class="form-control" style="min-width:220px;" placeholder="Enter passphrase (optional)" @bind="Passphrase" />
+        <button class="btn" @onclick="SavePassphrase">Save</button>
+    </div>
+    <div class="list-item" style="align-items:center; gap:12px;">
+        <div style="flex:1;">
+            <div class="title">Auto-protect create_* actions</div>
+            <div class="subtitle">Treat all actions with keys starting with <code>create_</code> as privileged by default</div>
+        </div>
+        <label style="display:flex; gap:8px; align-items:center;">
+            <input type="checkbox" @bind="AutoPrivCreate" /> Enable
+        </label>
+        <button class="btn" @onclick="SaveAutoPrivCreate">Save</button>
+    </div>
+    <div class="list-item" style="flex-direction:column; align-items:stretch; gap:10px;">
+        <div>
+            <div class="title">Voice Security</div>
+            <div class="subtitle">Use your voice as an extra layer of security for voice commands</div>
+        </div>
+        <div class="list" style="gap:8px;">
+            <div class="list-item" style="align-items:center; gap:12px;">
+                <div style="flex:1;">
+                    <div class="title">Enforcement</div>
+                    <div class="subtitle">Only allow voice commands that match your enrolled voiceprint</div>
+                </div>
+                <label style="display:flex; gap:8px; align-items:center;">
+                    <input type="checkbox" @bind="VoiceEnforce" /> Enforce
+                </label>
+                <button class="btn" @onclick="SaveVoiceEnforce">Save</button>
+            </div>
+            <div class="list-item" style="align-items:center; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1;">
+                    <div class="title">Enrollment Samples</div>
+                    <div class="subtitle">Samples enrolled: <strong>@EnrollCount</strong> (recommend 3–5)</div>
+                </div>
+                <button class="btn" @onclick="EnrollSample">🎙️ Enroll 3s</button>
+                <button class="btn" @onclick="ClearEnrollment">🗑️ Clear</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(VoiceSecInfo))
+            {
+                <div class="list-item" style="background:#11321a; border:1px solid #2e7a4b; color:#d6ffea;">@VoiceSecInfo</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(VoiceSecError))
+            {
+                <div class="list-item" style="background:#2a0e0e; border:1px solid #7a3030; color:#ffdada;">@VoiceSecError</div>
+            }
+        </div>
+        <div class="hint">Note: Current verification is a placeholder. For production, integrate a cloud speaker verification service.</div>
+    </div>
+</div>
+
+@code {
+    private int HistoryMaxVal;
+    private string? TransferJson;
+    private bool ToastsEnabled = true;
+    private bool VoiceEnforce = false;
+    private int EnrollCount = 0;
+    private string? VoiceSecInfo;
+    private string? VoiceSecError;
+    private string? Passphrase;
+    private bool AutoPrivCreate = true;
+    private string? VatRegistrationId;
+    private string? HmrcGatewayId;
+    private string? TaxDetailsMessage;
+    private bool _showFullVat = false;
+    private bool _showFullHmrc = false;
+    private ValidationState _vatValidation = ValidationState.None;
+    private ValidationState _hmrcValidation = ValidationState.None;
+    private string? _vatError;
+    private string? _hmrcError;
+    private List<TaxAuditEntry>? _taxAudit;
+
+    protected override void OnInitialized()
+    {
+        HistoryMaxVal = Voice.HistoryMax;
+        _ = LoadToasts();
+        _ = LoadVoiceSecurity();
+        _ = LoadPassphrase();
+        _ = LoadAutoPrivCreate();
+        _ = LoadTaxDetails();
+    }
+
+    private void OnSliderChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(Convert.ToString(e.Value), out var v))
+        {
+            HistoryMaxVal = Math.Clamp(v, 0, 50);
+        }
+    }
+
+    private async Task SaveHistoryMax()
+    {
+        await Voice.SetHistoryMaxAsync(HistoryMaxVal);
+        StateHasChanged();
+    }
+
+    private async Task ResetHistoryMax()
+    {
+        HistoryMaxVal = 10;
+        await Voice.SetHistoryMaxAsync(HistoryMaxVal);
+        StateHasChanged();
+    }
+
+    private async Task ExportData()
+    {
+        TransferJson = await VoiceStorage.ExportAllAsync();
+    }
+
+    private async Task ImportData()
+    {
+        if (string.IsNullOrWhiteSpace(TransferJson)) return;
+        await VoiceStorage.ImportAllAsync(TransferJson);
+        // Reinitialize voice service to reflect imported settings/history
+        await Voice.InitializeAsync();
+        HistoryMaxVal = Voice.HistoryMax;
+        StateHasChanged();
+    }
+
+    private async Task LoadToasts()
+    {
+        ToastsEnabled = await VoiceStorage.GetToastsEnabledAsync(true);
+        StateHasChanged();
+    }
+
+    private async Task SaveToasts()
+    {
+        await VoiceStorage.SetToastsEnabledAsync(ToastsEnabled);
+        StateHasChanged();
+    }
+
+    private async Task LoadPassphrase()
+    {
+        Passphrase = await VoiceStorage.GetPassphraseAsync();
+        StateHasChanged();
+    }
+
+    private async Task SavePassphrase()
+    {
+        await VoiceStorage.SetPassphraseAsync(Passphrase);
+        // Let VoiceService reload passphrase with InitializeAsync (cheap)
+        await Voice.InitializeAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAutoPrivCreate()
+    {
+        AutoPrivCreate = await VoiceStorage.GetAutoPrivCreateAsync(true);
+        StateHasChanged();
+    }
+
+    private async Task SaveAutoPrivCreate()
+    {
+        await VoiceStorage.SetAutoPrivCreateAsync(AutoPrivCreate);
+        await Voice.InitializeAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadVoiceSecurity()
+    {
+        VoiceEnforce = await VoiceSecurity.GetEnforceAsync();
+        try { EnrollCount = (await VoiceStorage.GetVoiceEnrollmentAsync()).Count; } catch { EnrollCount = 0; }
+        StateHasChanged();
+    }
+
+    private async Task SaveVoiceEnforce()
+    {
+        if (VoiceEnforce)
+        {
+            // Warn if no enrollment samples yet
+            if ((await VoiceStorage.GetVoiceEnrollmentAsync()).Count == 0)
+            {
+                VoiceSecError = "No enrollment samples yet. Please enroll at least one sample.";
+                StateHasChanged();
+            }
+        }
+        await VoiceSecurity.SetEnforceAsync(VoiceEnforce);
+        VoiceSecInfo = VoiceEnforce ? "Enforcement enabled" : "Enforcement disabled";
+        StateHasChanged();
+    }
+
+    private async Task EnrollSample()
+    {
+        VoiceSecError = null; VoiceSecInfo = null;
+        var ok = await VoiceSecurity.EnrollAsync(3);
+        if (ok) { VoiceSecInfo = "Enrollment sample added"; }
+        else { VoiceSecError = "Enrollment failed (mic permission or unsupported)"; }
+        await LoadVoiceSecurity();
+    }
+
+    private async Task ClearEnrollment()
+    {
+        await VoiceSecurity.ClearEnrollmentAsync();
+        VoiceSecInfo = "Enrollment cleared";
+        await LoadVoiceSecurity();
+    }
+
+    private async Task LoadTaxDetails()
+    {
+        VatRegistrationId = await VoiceStorage.GetVatRegistrationIdAsync();
+        HmrcGatewayId = await VoiceStorage.GetHmrcGatewayIdAsync();
+        _taxAudit = await VoiceStorage.GetTaxAuditAsync();
+        StateHasChanged();
+    }
+
+    private void ToggleVatVisibility()
+    {
+        _showFullVat = !_showFullVat;
+    }
+
+    private void ToggleHmrcVisibility()
+    {
+        _showFullHmrc = !_showFullHmrc;
+    }
+
+    private string MaskValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length < 4) return "****";
+        return value.Substring(0, 4) + new string('*', Math.Max(value.Length - 4, 4));
+    }
+
+    private string GetVatBorderColor()
+    {
+        return _vatValidation switch
+        {
+            ValidationState.Valid => "#4CAF50",
+            ValidationState.Invalid => "#ff6b6b",
+            _ => "var(--border)"
+        };
+    }
+
+    private string GetHmrcBorderColor()
+    {
+        return _hmrcValidation switch
+        {
+            ValidationState.Valid => "#4CAF50",
+            ValidationState.Invalid => "#ff6b6b",
+            _ => "var(--border)"
+        };
+    }
+
+    private void ValidateVatOnBlur()
+    {
+        _vatError = null;
+        
+        if (string.IsNullOrWhiteSpace(VatRegistrationId))
+        {
+            _vatValidation = ValidationState.None;
+            StateHasChanged();
+            return;
+        }
+
+        if (HmrcValidation.ValidateVatNumberFormat(VatRegistrationId))
+        {
+            _vatValidation = ValidationState.Valid;
+            VatRegistrationId = HmrcValidation.FormatVatNumber(VatRegistrationId);
+        }
+        else
+        {
+            _vatValidation = ValidationState.Invalid;
+            _vatError = HmrcValidation.GetVatValidationError(VatRegistrationId);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ValidateHmrcOnBlur()
+    {
+        _hmrcError = null;
+        
+        if (string.IsNullOrWhiteSpace(HmrcGatewayId))
+        {
+            _hmrcValidation = ValidationState.None;
+            StateHasChanged();
+            return;
+        }
+
+        if (HmrcValidation.ValidateHmrcGatewayIdFormat(HmrcGatewayId))
+        {
+            _hmrcValidation = ValidationState.Valid;
+        }
+        else
+        {
+            _hmrcValidation = ValidationState.Invalid;
+            _hmrcError = "HMRC Gateway ID format is invalid (6-20 alphanumeric characters)";
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SaveTaxDetails()
+    {
+        // Validate before saving
+        ValidateVatOnBlur();
+        ValidateHmrcOnBlur();
+
+        if (_vatValidation == ValidationState.Invalid || _hmrcValidation == ValidationState.Invalid)
+        {
+            TaxDetailsMessage = "Please fix validation errors before saving";
+            StateHasChanged();
+            await Task.Delay(3000);
+            TaxDetailsMessage = null;
+            StateHasChanged();
+            return;
+        }
+
+        // Save with audit trail
+        await VoiceStorage.SaveTaxDetailsWithAuditAsync(VatRegistrationId, HmrcGatewayId);
+        
+        // Reload audit trail
+        _taxAudit = await VoiceStorage.GetTaxAuditAsync();
+        
+        TaxDetailsMessage = "Tax details saved successfully!";
+        StateHasChanged();
+        
+        // Clear message after 3 seconds
+        await Task.Delay(3000);
+        TaxDetailsMessage = null;
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,91 @@
+<!-- Search Bar -->
+<div class="search-bar">
+  <span class="search-icon">🔍</span>
+  <input type="text" class="search-input" placeholder="Search jobs..." />
+  <button class="search-clear" aria-label="Clear search">×</button>
+</div>
+
+<!-- Filter Chips -->
+<div class="filter-chips">
+  <button class="filter-chip active" data-filter="all">All</button>
+  <button class="filter-chip" data-filter="quote-sent">Quote Sent</button>
+  <button class="filter-chip" data-filter="upcoming">Upcoming</button>
+  <button class="filter-chip" data-filter="in-progress">In Progress</button>
+  <button class="filter-chip" data-filter="to-invoice">To Invoice</button>
+  <button class="filter-chip" data-filter="paid">Paid</button>
+</div>
+
+<ul class="list" id="jobs-list">
+  <li class="list-item" data-category="quote-sent">
+    <div>
+      <div class="title">Quote Sent</div>
+      <div class="subtitle">0 jobs</div>
+    </div>
+    <span>›</span>
+  </li>
+  <li class="list-item" data-category="upcoming">
+    <div>
+      <div class="title">Upcoming</div>
+      <div class="subtitle">0 jobs</div>
+    </div>
+    <span>›</span>
+  </li>
+  <li class="list-item" data-category="in-progress">
+    <div>
+      <div class="title">In Progress</div>
+      <div class="subtitle">0 jobs</div>
+    </div>
+    <span>›</span>
+  </li>
+  <li class="list-item" data-category="to-invoice">
+    <div>
+      <div class="title">To Invoice</div>
+      <div class="subtitle">0 jobs</div>
+    </div>
+    <span>›</span>
+  </li>
+  <li class="list-item" data-category="paid">
+    <div>
+      <div class="title">Paid</div>
+      <div class="subtitle">0 jobs</div>
+    </div>
+    <span>›</span>
+  </li>
+</ul>
+
+<!-- Empty State (hidden by default) -->
+<div class="empty-state" style="display:none;" id="jobs-empty">
+  <div class="empty-state-icon">📋</div>
+  <div class="empty-state-title">No Jobs Found</div>
+  <div class="empty-state-subtitle">Get started by creating your first job using the + button below</div>
+  <button class="btn empty-state-cta">Create Job</button>
+</div>
+
+<!-- Floating Action Button -->
+<button class="fab" aria-label="Add new job" title="Add new job">+</button>
+
+<script>
+  // Filter chips functionality
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      
+      const filter = this.dataset.filter;
+      const items = document.querySelectorAll('#jobs-list .list-item');
+      
+      items.forEach(item => {
+        if (filter === 'all' || item.dataset.category === filter) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+  });
+  
+  // FAB click handler
+  document.querySelector('.fab').addEventListener('click', function() {
+    window.aiMate?.toast.info('Create job form coming soon!');
+  });
+</script>

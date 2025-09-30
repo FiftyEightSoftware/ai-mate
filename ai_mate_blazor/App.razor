@@ -1,0 +1,43 @@
+@inject ai_mate_blazor.Services.VoiceStorageService VoiceStorage
+@inject NavigationManager Navigation
+
+@if (!_isInitialized)
+{
+    <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-size: 1.2em;">
+        Loading...
+    </div>
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p role="alert">Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+}
+
+@code {
+    private bool _isInitialized = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if onboarding has been completed
+        var onboardingCompleted = await VoiceStorage.GetOnboardingCompletedAsync();
+        
+        if (!onboardingCompleted && !Navigation.Uri.Contains("/onboarding"))
+        {
+            // Redirect to onboarding on first startup
+            Navigation.NavigateTo("/onboarding");
+        }
+        
+        _isInitialized = true;
+        StateHasChanged();
+    }
+}

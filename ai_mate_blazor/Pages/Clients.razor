@@ -1,0 +1,14 @@
+@page "/clients"
+<h3>Clients</h3>
+<ul class="list">
+    @for (var i = 1; i <= 3; i++)
+    {
+        <li class="list-item">
+            <div>
+                <div class="title">Client @i</div>
+                <div class="subtitle">No history</div>
+            </div>
+            <span>›</span>
+        </li>
+    }
+</ul>

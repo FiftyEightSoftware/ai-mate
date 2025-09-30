@@ -1,0 +1,60 @@
+<!-- Quick Stats -->
+<div class="list" style="margin-bottom: 16px;">
+  <div class="list-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+    <div class="subtitle">Welcome back!</div>
+    <div class="title" style="font-size: 20px;">Quick Overview</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;">
+  <div class="card" style="padding: 16px;">
+    <div style="font-size: 28px; margin-bottom: 4px;">5</div>
+    <div class="subtitle">Active Jobs</div>
+  </div>
+  <div class="card" style="padding: 16px;">
+    <div style="font-size: 28px; margin-bottom: 4px;">12</div>
+    <div class="subtitle">Total Clients</div>
+  </div>
+  <div class="card" style="padding: 16px;">
+    <div style="font-size: 28px; margin-bottom: 4px; color: var(--brand);">£2.4k</div>
+    <div class="subtitle">Outstanding</div>
+  </div>
+  <div class="card" style="padding: 16px;">
+    <div style="font-size: 28px; margin-bottom: 4px; color: #ffb265;">£890</div>
+    <div class="subtitle">Overdue</div>
+  </div>
+</div>
+
+<!-- Navigation Grid -->
+<div class="list" style="margin-bottom: 12px;">
+  <div class="list-item" style="padding: 8px 16px;">
+    <div class="subtitle">Navigate</div>
+  </div>
+</div>
+
+<div class="grid">
+  <a class="card" hx-get="/pages/jobs.html" hx-target="#content" hx-push-url="true" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <span style="font-size: 32px;">🛠️</span>
+    <span>Jobs</span>
+  </a>
+  <a class="card" hx-get="/pages/quotes.html" hx-target="#content" hx-push-url="true" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <span style="font-size: 32px;">📝</span>
+    <span>Quotes</span>
+  </a>
+  <a class="card" hx-get="/pages/invoices.html" hx-target="#content" hx-push-url="true" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <span style="font-size: 32px;">💰</span>
+    <span>Invoices</span>
+  </a>
+  <a class="card" hx-get="/pages/expenses.html" hx-target="#content" hx-push-url="true" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <span style="font-size: 32px;">💸</span>
+    <span>Expenses</span>
+  </a>
+  <a class="card" hx-get="/pages/clients.html" hx-target="#content" hx-push-url="true" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <span style="font-size: 32px;">👥</span>
+    <span>Clients</span>
+  </a>
+  <a class="card" hx-get="/pages/assistant.html" hx-target="#content" hx-push-url="true" style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <span style="font-size: 32px;">🎙️</span>
+    <span>Mate</span>
+  </a>
+</div>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>AI-Mate</title>
+    <base href="/" />
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="ai_mate_blazor.styles.css" rel="stylesheet" />
+    <link href="manifest.webmanifest" rel="manifest" />
+    <meta name="theme-color" content="#c8793e" />
+    <!-- iOS PWA meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AI-Mate" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+</head>
+
+<body>
+    <div id="splash" style="position:fixed;inset:0;background:#0b0e12;display:flex;align-items:center;justify-content:center;z-index:9999;">
+        <img src="/Brand.png" alt="AI-Mate brand" style="width:100vw;height:100vh;object-fit:cover;max-width:100%;max-height:100%;filter:drop-shadow(0 12px 32px rgba(0,0,0,.45));" />
+    </div>
+    <div id="install-banner" class="install-banner" role="status" aria-live="polite">
+        <span class="icon">📲</span>
+        <span>Install this app: tap <strong>Share</strong> ➜ <strong>Add to Home Screen</strong>.</span>
+        <button aria-label="Dismiss" onclick="(function(){ localStorage.setItem('aimate_install_dismissed','1'); document.getElementById('install-banner').classList.remove('show'); })()">✕</button>
+    </div>
+
+    <div id="app">
+        <svg class="loading-progress">
+            <circle r="40%" cx="50%" cy="50%" />
+            <circle r="40%" cx="50%" cy="50%" />
+        </svg>
+        <div class="loading-progress-text"></div>
+    </div>
+    <div id="blazor-error-ui"></div>
+    <script src="voice.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+      Blazor.start().then(() => {
+        // Keep splash visible for at least 5 seconds, then auto-remove (no interaction required)
+        const splash = document.getElementById('splash');
+        if (!splash) return;
+        let minElapsed = false;
+        let interacted = false;
+        const tryRemove = () => {
+          if (minElapsed) {
+            document.removeEventListener('click', onInteract, true);
+            document.removeEventListener('keydown', onInteract, true);
+            document.removeEventListener('touchstart', onInteract, true);
+            splash.remove();
+          }
+        };
+        const onInteract = () => { interacted = true; tryRemove(); };
+        document.addEventListener('click', onInteract, true);
+        document.addEventListener('keydown', onInteract, true);
+        document.addEventListener('touchstart', onInteract, true);
+        // Minimum display of 5s
+        setTimeout(() => { minElapsed = true; tryRemove(); }, 5000);
+        // safety: auto-remove at 10s regardless
+        setTimeout(() => { try { splash.remove(); } catch {} }, 10000);
+        try { if (window.voice && typeof window.voice.bindHotkeys === 'function') { window.voice.bindHotkeys(); } } catch {}
+      });
+      if ('serviceWorker' in navigator) {
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+          // Dev: actively unregister any old SW to avoid stale cache in simulator
+          navigator.serviceWorker.getRegistrations().then(rs => { try { rs.forEach(r => r.unregister()); } catch {} });
+        } else {
+          navigator.serviceWorker.register('service-worker.js');
+        }
+      }
+
+      // iOS install banner: show only on iOS Safari and not standalone
+        const ua = window.navigator.userAgent;
+        const isIOS = /iPad|iPhone|iPod/.test(ua);
+        const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        const dismissed = localStorage.getItem('aimate_install_dismissed') === '1';
+        if (isIOS && !isStandalone && !dismissed) {
+          const b = document.getElementById('install-banner');
+          if (b) b.classList.add('show');
+        }
+
+        // When app is installed or opened in standalone, hide banner and mark installed
+        function markInstalled(){
+          localStorage.setItem('aimate_install_dismissed','1');
+          const b = document.getElementById('install-banner');
+          if (b) b.classList.remove('show');
+        }
+        if (isStandalone) markInstalled();
+        try {
+          window.matchMedia('(display-mode: standalone)').addEventListener('change', (e) => {
+            if (e.matches) markInstalled();
+          });
+        } catch {}
+    </script>
+</body>
+
+</html>

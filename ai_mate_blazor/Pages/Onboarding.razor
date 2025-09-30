@@ -1,0 +1,257 @@
+@page "/onboarding"
+@using ai_mate_blazor.Models
+@inject ai_mate_blazor.Services.VoiceStorageService VoiceStorage
+@inject ai_mate_blazor.Services.HmrcValidationService HmrcValidation
+@inject NavigationManager Navigation
+
+<div style="max-width: 600px; margin: 40px auto; padding: 20px;">
+    <h2 id="onboarding-heading" style="margin-bottom: 24px;">Welcome to AI Mate</h2>
+    <p style="margin-bottom: 32px;">Let's get you set up. Please provide your tax registration details below:</p>
+    
+    <div class="list" style="gap: 16px;">
+        <div class="list-item" style="flex-direction: column; align-items: stretch; gap: 12px;">
+            <div>
+                <label for="vat-input" class="title">VAT Registration Number</label>
+                <div id="vat-help" class="subtitle">Your VAT registration ID (e.g., GB123456789)</div>
+            </div>
+            <input 
+                id="vat-input"
+                class="form-control" 
+                placeholder="Enter your VAT registration number" 
+                @bind="VatRegistrationId"
+                @bind:event="oninput"
+                @onblur="ValidateVatOnBlur"
+                aria-describedby="vat-help"
+                aria-required="false"
+                aria-invalid="@(_vatValidation == ValidationState.Invalid)"
+                style="background: var(--card); color: var(--text); border: 1px solid @GetVatBorderColor(); padding: 8px 12px; border-radius: 4px;" />
+            @if (_vatValidation == ValidationState.Validating)
+            {
+                <div style="color: #4CAF50; font-size: 0.9em;">⏳ Validating...</div>
+            }
+            else if (_vatValidation == ValidationState.Valid)
+            {
+                <div style="color: #4CAF50; font-size: 0.9em;">✓ Valid VAT number @if(!string.IsNullOrWhiteSpace(_companyName)){<span>- @_companyName</span>}</div>
+            }
+            else if (!string.IsNullOrWhiteSpace(VatError))
+            {
+                <div role="alert" style="color: #ff6b6b; font-size: 0.9em;">@VatError</div>
+            }
+        </div>
+
+        <div class="list-item" style="flex-direction: column; align-items: stretch; gap: 12px;">
+            <div>
+                <label for="hmrc-input" class="title">Government Gateway HMRC ID</label>
+                <div id="hmrc-help" class="subtitle">Your HMRC Government Gateway user ID</div>
+            </div>
+            <input 
+                id="hmrc-input"
+                class="form-control" 
+                placeholder="Enter your Government Gateway HMRC ID" 
+                @bind="HmrcGatewayId"
+                @bind:event="oninput"
+                @onblur="ValidateHmrcOnBlur"
+                aria-describedby="hmrc-help"
+                aria-required="false"
+                aria-invalid="@(_hmrcValidation == ValidationState.Invalid)"
+                style="background: var(--card); color: var(--text); border: 1px solid @GetHmrcBorderColor(); padding: 8px 12px; border-radius: 4px;" />
+            @if (_hmrcValidation == ValidationState.Valid)
+            {
+                <div style="color: #4CAF50; font-size: 0.9em;">✓ Valid format</div>
+            }
+            else if (!string.IsNullOrWhiteSpace(HmrcError))
+            {
+                <div role="alert" style="color: #ff6b6b; font-size: 0.9em;">@HmrcError</div>
+            }
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
+            <button class="btn" @onclick="SaveAndContinue" style="flex: 1; background: #4CAF50; color: white; padding: 12px;">
+                Save & Continue
+            </button>
+            <button class="btn" @onclick="SkipForNow" style="background: transparent; border: 1px solid var(--border);">
+                Skip for now
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(InfoMessage))
+    {
+        <div style="margin-top: 20px; padding: 12px; background: #11321a; border: 1px solid #2e7a4b; color: #d6ffea; border-radius: 4px;">
+            @InfoMessage
+        </div>
+    }
+</div>
+
+@code {
+    private string? VatRegistrationId;
+    private string? HmrcGatewayId;
+    private string? VatError;
+    private string? HmrcError;
+    private string? InfoMessage;
+    private ValidationState _vatValidation = ValidationState.None;
+    private ValidationState _hmrcValidation = ValidationState.None;
+    private string? _companyName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load existing values if any
+        VatRegistrationId = await VoiceStorage.GetVatRegistrationIdAsync();
+        HmrcGatewayId = await VoiceStorage.GetHmrcGatewayIdAsync();
+    }
+
+    private string GetVatBorderColor()
+    {
+        return _vatValidation switch
+        {
+            ValidationState.Valid => "#4CAF50",
+            ValidationState.Invalid => "#ff6b6b",
+            ValidationState.Validating => "#FFA726",
+            _ => "var(--border)"
+        };
+    }
+
+    private string GetHmrcBorderColor()
+    {
+        return _hmrcValidation switch
+        {
+            ValidationState.Valid => "#4CAF50",
+            ValidationState.Invalid => "#ff6b6b",
+            _ => "var(--border)"
+        };
+    }
+
+    private async Task ValidateVatOnBlur()
+    {
+        VatError = null;
+        
+        if (string.IsNullOrWhiteSpace(VatRegistrationId))
+        {
+            _vatValidation = ValidationState.None;
+            StateHasChanged();
+            return;
+        }
+
+        // Check format first
+        if (!HmrcValidation.ValidateVatNumberFormat(VatRegistrationId))
+        {
+            VatError = HmrcValidation.GetVatValidationError(VatRegistrationId);
+            _vatValidation = ValidationState.Invalid;
+            StateHasChanged();
+            return;
+        }
+
+        // Perform online validation
+        _vatValidation = ValidationState.Validating;
+        StateHasChanged();
+
+        try
+        {
+            var (isValid, companyName, address) = await HmrcValidation.ValidateVatNumberOnlineAsync(VatRegistrationId);
+            
+            if (isValid)
+            {
+                _vatValidation = ValidationState.Valid;
+                _companyName = companyName;
+                VatRegistrationId = HmrcValidation.FormatVatNumber(VatRegistrationId);
+            }
+            else
+            {
+                _vatValidation = ValidationState.Invalid;
+                VatError = "VAT number could not be verified";
+            }
+        }
+        catch
+        {
+            // Fall back to format validation only
+            _vatValidation = ValidationState.Valid;
+            VatRegistrationId = HmrcValidation.FormatVatNumber(VatRegistrationId);
+        }
+
+        StateHasChanged();
+    }
+
+    private void ValidateHmrcOnBlur()
+    {
+        HmrcError = null;
+        
+        if (string.IsNullOrWhiteSpace(HmrcGatewayId))
+        {
+            _hmrcValidation = ValidationState.None;
+            StateHasChanged();
+            return;
+        }
+
+        if (HmrcValidation.ValidateHmrcGatewayIdFormat(HmrcGatewayId))
+        {
+            _hmrcValidation = ValidationState.Valid;
+        }
+        else
+        {
+            _hmrcValidation = ValidationState.Invalid;
+            HmrcError = "HMRC Gateway ID format is invalid (6-20 alphanumeric characters)";
+        }
+
+        StateHasChanged();
+    }
+
+    private bool ValidateInputs()
+    {
+        bool isValid = true;
+        VatError = null;
+        HmrcError = null;
+
+        // VAT validation
+        if (!string.IsNullOrWhiteSpace(VatRegistrationId))
+        {
+            if (!HmrcValidation.ValidateVatNumberFormat(VatRegistrationId))
+            {
+                VatError = HmrcValidation.GetVatValidationError(VatRegistrationId);
+                _vatValidation = ValidationState.Invalid;
+                isValid = false;
+            }
+        }
+
+        // HMRC Gateway ID validation
+        if (!string.IsNullOrWhiteSpace(HmrcGatewayId))
+        {
+            if (!HmrcValidation.ValidateHmrcGatewayIdFormat(HmrcGatewayId))
+            {
+                HmrcError = "HMRC Gateway ID format is invalid";
+                _hmrcValidation = ValidationState.Invalid;
+                isValid = false;
+            }
+        }
+
+        return isValid;
+    }
+
+    private async Task SaveAndContinue()
+    {
+        if (!ValidateInputs())
+        {
+            StateHasChanged();
+            return;
+        }
+
+        // Save both IDs with audit trail
+        await VoiceStorage.SaveTaxDetailsWithAuditAsync(VatRegistrationId, HmrcGatewayId);
+        
+        // Mark onboarding as complete
+        await VoiceStorage.SetOnboardingCompletedAsync(true);
+
+        InfoMessage = "Registration details saved successfully!";
+        StateHasChanged();
+
+        // Navigate to home after a brief delay
+        await Task.Delay(1000);
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task SkipForNow()
+    {
+        // Mark onboarding as complete even if skipped
+        await VoiceStorage.SetOnboardingCompletedAsync(true);
+        Navigation.NavigateTo("/");
+    }
+}

@@ -1,0 +1,42 @@
+@page "/assistant"
+@inject ai_mate_blazor.Services.VoiceService Voice
+<h3>Mate</h3>
+<div class="assistant">
+    <button class="mic-button" aria-label="Activate voice assistant">🎙️ Hold to Speak</button>
+    <div class="transcript">Say: “Start a new job for John Smith at 123 Apple Street. It’s a boiler service.”</div>
+</div>
+
+<EditForm Model="this" OnValidSubmit="SimulateAsync">
+    <div class="list" style="margin-top:16px;">
+        <div class="list-item" style="gap:10px; align-items:center; flex-wrap:wrap;">
+            <div style="flex:1; min-width:220px;">
+                <div class="title">Simulate Phrase</div>
+                <div class="subtitle">Type a phrase to simulate recognition (optionally execute matched action)</div>
+            </div>
+            <InputText @bind-Value="SimPhrase" class="form-control" placeholder="e.g., show jobs" />
+            <label style="display:flex; gap:6px; align-items:center;">
+                <input type="checkbox" @bind="SimExecute" /> Execute action
+            </label>
+            <button type="submit" class="btn">Run</button>
+        </div>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(SimInfo))
+    {
+        <div class="list" style="margin-top:8px;"><div class="list-item" style="background:#11321a; border:1px solid #2e7a4b; color:#d6ffea;">@SimInfo</div></div>
+    }
+</EditForm>
+
+@code {
+    private string? SimPhrase { get; set; }
+    private bool SimExecute { get; set; } = true;
+    private string? SimInfo { get; set; }
+
+    private async Task SimulateAsync()
+    {
+        var p = (SimPhrase ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(p)) { SimInfo = "Enter a phrase"; return; }
+        await Voice.SimulateRecognitionAsync(p, SimExecute);
+        SimInfo = "Simulated";
+        StateHasChanged();
+    }
+}

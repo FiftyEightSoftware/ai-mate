@@ -1,0 +1,99 @@
+@page "/payments"
+@using ai_mate_blazor.Services
+@inject ai_mate_blazor.Services.ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h3>Payments</h3>
+
+<div class="list" style="margin-bottom:10px;">
+    <div class="list-item" style="gap:10px; align-items:center; flex-wrap:wrap;">
+        <div class="title" style="margin-right:auto;">Filter</div>
+        <label class="subtitle" style="display:flex; gap:6px; align-items:center;">
+            <span>From</span>
+            <input type="date" class="form-control" style="min-width:160px;" @bind-value="_from" @bind-value:format="yyyy-MM-dd" />
+        </label>
+        <label class="subtitle" style="display:flex; gap:6px; align-items:center;">
+            <span>To</span>
+            <input type="date" class="form-control" style="min-width:160px;" @bind-value="_to" @bind-value:format="yyyy-MM-dd" />
+        </label>
+        <button class="btn" @onclick="Refresh">↻ Refresh</button>
+        <button class="btn" @onclick="ExportCsv">⬇️ CSV</button>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="empty">Loading...</div>
+}
+else if (_error is not null)
+{
+    <div class="list-item" style="background:#2a0e0e; border:1px solid #7a3030; color:#ffdada;">@_error</div>
+}
+else if (_items is null || _items.Count == 0)
+{
+    <div class="empty">No payments found</div>
+}
+else
+{
+    @foreach (var p in _items)
+    {
+        <div class="list-item" style="gap:10px; align-items:center;">
+            <div style="flex:1;">
+                <div class="title">@p.amount.ToString("C")</div>
+                <div class="subtitle">Paid @p.paidAt.ToShortDateString() • Invoice: <a href="javascript:void(0)" @onclick="(() => OpenInvoice(p.invoiceId))">@p.invoiceId</a></div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<ai_mate_blazor.Services.ApiClient.PaymentDto>? _items;
+    private bool _loading = true;
+    private string? _error;
+    private DateTime? _from = DateTime.Today.AddDays(-30);
+    private DateTime? _to = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+    }
+
+    private async Task Refresh()
+    {
+        try
+        {
+            _loading = true;
+            _items = await Api.GetPaymentsAsync(_from, _to);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenInvoice(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return;
+        Nav.NavigateTo($"/invoices/{Uri.EscapeDataString(id)}");
+    }
+
+    private async Task ExportCsv()
+    {
+        if (_items is null || _items.Count == 0) return;
+        var rows = new List<string>();
+        rows.Add("Id,InvoiceId,Amount,PaidAt");
+        foreach (var p in _items)
+        {
+            var id = p.id?.Replace("\"", "\"\"") ?? string.Empty;
+            var inv = p.invoiceId?.Replace("\"", "\"\"") ?? string.Empty;
+            rows.Add($"\"{id}\",\"{inv}\",{p.amount},{p.paidAt:yyyy-MM-dd}");
+        }
+        var csv = string.Join("\n", rows);
+        await JS.InvokeVoidAsync("voice.downloadFile", $"payments_{DateTime.Now:yyyyMMdd}.csv", csv, "text/csv");
+    }
+}

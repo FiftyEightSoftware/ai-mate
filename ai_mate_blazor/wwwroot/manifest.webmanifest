@@ -1,0 +1,16 @@
+{
+  "name": "AI-Mate",
+  "short_name": "AI-Mate",
+  "id": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0e12",
+  "theme_color": "#c8793e",
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "/icons/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "/icons/maskable-icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" },
+    { "src": "/icons/maskable-icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" }
+  ]
+}

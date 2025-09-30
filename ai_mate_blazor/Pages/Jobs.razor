@@ -1,0 +1,61 @@
+@page "/jobs"
+@using ai_mate_blazor.Models
+@inject ai_mate_blazor.Services.ApiClient Api
+
+<h3>Jobs</h3>
+
+<EditForm Model="this" OnValidSubmit="CreateAsync">
+    <div class="list-item" style="gap:10px;">
+        <InputText @bind-Value="NewJobTitle" class="form-control" placeholder="New job title" />
+        <button type="submit" class="btn">Add</button>
+    </div>
+    <ValidationSummary />
+</EditForm>
+
+@if (JobList is null)
+{
+    <div class="empty">Loading…</div>
+}
+else if (JobList.Count == 0)
+{
+    <div class="empty">No jobs yet</div>
+}
+else
+{
+    <ul class="list">
+        @foreach (var j in JobList)
+        {
+            <li class="list-item">
+                <div>
+                    <div class="title">@j.Title</div>
+                    <div class="subtitle">Status: @j.Status</div>
+                </div>
+                <span>›</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<Job>? JobList;
+    [System.ComponentModel.DataAnnotations.Required]
+    public string? NewJobTitle { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        JobList = await Api.GetJobsAsync() ?? new List<Job>();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewJobTitle)) return;
+        var created = await Api.CreateJobAsync(NewJobTitle);
+        if (created is not null)
+        {
+            JobList ??= new();
+            JobList.Insert(0, created);
+            NewJobTitle = string.Empty;
+            StateHasChanged();
+        }
+    }
+}

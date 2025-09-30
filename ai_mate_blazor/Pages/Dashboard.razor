@@ -1,0 +1,187 @@
+@page "/dashboard"
+@using ai_mate_blazor.Services
+@inject ai_mate_blazor.Services.ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h3>Dashboard</h3>
+
+<div class="list" style="margin-bottom:10px;">
+    <div class="list-item" style="gap:10px; align-items:center;">
+        <div class="title" style="margin-right:auto;">Overview</div>
+        <label class="subtitle" style="display:flex; gap:6px; align-items:center;">
+            <span>Horizon</span>
+            <select class="form-control" style="min-width:100px;" @onchange="OnWeeksChanged">
+                <option value="4" selected="@(_weeks == 4)">4 weeks</option>
+                <option value="8" selected="@(_weeks == 8)">8 weeks</option>
+                <option value="12" selected="@(_weeks == 12)">12 weeks</option>
+            </select>
+        </label>
+        <button class="btn" @onclick="FetchAsync">↻ Refresh</button>
+    </div>
+    @if (!string.IsNullOrEmpty(_info))
+    {
+        <div class="list-item" style="background:#11321a; border:1px solid #2e7a4b; color:#d6ffea;">@_info</div>
+    }
+</div>
+@if (_loading)
+{
+    <div class="empty">Loading...</div>
+}
+else if (_error is not null)
+{
+    <div class="list-item" style="background:#2a0e0e; border:1px solid #7a3030; color:#ffdada;">@_error</div>
+}
+else if (_data is null)
+{
+    <div class="empty">No data</div>
+}
+else
+{
+    <div class="grid" style="grid-template-columns: repeat(2,1fr); gap:12px;">
+        <div class="card">
+            <div class="title">Outstanding</div>
+            <div class="subtitle">Total unpaid (not overdue)</div>
+            <div style="font-size:28px; font-weight:700; margin-top:6px;">@_data.outstandingTotal.ToString("C")</div>
+        </div>
+        <div class="card">
+            <div class="title">Overdue</div>
+            <div class="subtitle">Total overdue invoices</div>
+            <div style="font-size:28px; font-weight:700; margin-top:6px; color:#ffb265;">@_data.overdueTotal.ToString("C")</div>
+        </div>
+        <div class="card">
+            <div class="title">Due Soon (7d)</div>
+            <div class="subtitle">Invoices due within a week</div>
+            <div style="font-size:28px; font-weight:700; margin-top:6px;">@_data.dueSoonTotal.ToString("C")</div>
+        </div>
+        <div class="card">
+            <div class="title">Paid (30d)</div>
+            <div class="subtitle">Payments received last 30 days</div>
+            <div style="font-size:28px; font-weight:700; margin-top:6px;">@_data.paidLast30.ToString("C")</div>
+        </div>
+    </div>
+
+    <div class="list" style="margin-top:16px;">
+        <div class="list-item" style="justify-content:space-between; gap:10px; align-items:center;">
+            <div>
+                <div class="title">Projected Cash Flow (8 weeks)</div>
+                <div class="subtitle">Weekly due totals</div>
+            </div>
+            <button class="btn" @onclick="ExportCashFlowCsv">⬇️ CSV</button>
+        </div>
+        <div class="card" style="overflow-x:auto;">
+            <svg width="100%" height="140" viewBox="0 0 640 140" preserveAspectRatio="none">
+                @if (_data.projectedCashFlow.Count > 0)
+                {
+                    var max = Math.Max(1m, _data.projectedCashFlow.Max(p => p.amount));
+                    var step = 640m / Math.Max(1, _data.projectedCashFlow.Count - 1);
+                    var points = new List<string>();
+                    for (int i = 0; i < _data.projectedCashFlow.Count; i++)
+                    {
+                        var x = (decimal)i * step;
+                        var y = 120m - (120m * (_data.projectedCashFlow[i].amount / max));
+                        points.Add($"{x:F0},{y:F0}");
+                    }
+                    var poly = string.Join(" ", points);
+                    <polyline fill="none" stroke="#d49a64" stroke-width="2" points="@poly"></polyline>
+                }
+            </svg>
+        </div>
+    </div>
+
+    <div class="list" style="margin-top:16px;">
+        <div class="list-item" style="justify-content:space-between; gap:10px; align-items:center;">
+            <div>
+                <div class="title">Invoices</div>
+                <div class="subtitle">Outstanding, Overdue, and Due Soon</div>
+            </div>
+            <button class="btn" @onclick="ExportInvoicesCsv">⬇️ CSV</button>
+        </div>
+        @foreach (var inv in _data.invoices.OrderByDescending(i => i.dueDate))
+        {
+            <button class="list-item" style="gap:10px; align-items:center; background:transparent; border:none; text-align:left;" @onclick="(() => OpenInvoice(inv.id))">
+                <div style="flex:1;">
+                    <div class="title">@inv.customer</div>
+                    <div class="subtitle">Due @inv.dueDate.ToShortDateString() • <code>@inv.status</code></div>
+                </div>
+                <div style="font-weight:700;">@inv.amount.ToString("C")</div>
+            </button>
+        }
+    </div>
+}
+
+@code {
+    private ApiClient.DashboardResponse? _data;
+    private bool _loading = true;
+    private string? _error;
+    private string? _info;
+    private int _weeks = 8;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await FetchAsync();
+    }
+
+    private async Task FetchAsync()
+    {
+        try
+        {
+            _loading = true;
+            _data = await Api.GetDashboardAsync(_weeks);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnWeeksChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(Convert.ToString(e.Value), out var v))
+        {
+            _weeks = Math.Clamp(v, 4, 12);
+            await FetchAsync();
+            _info = $"Horizon set to {_weeks} weeks";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ExportInvoicesCsv()
+    {
+        if (_data is null || _data.invoices is null) return;
+        var rows = new List<string>();
+        rows.Add("Id,Customer,Amount,DueDate,Status");
+        foreach (var i in _data.invoices)
+        {
+            var id = (i.id ?? string.Empty).Replace("\"", "\"\"");
+            var cust = (i.customer ?? string.Empty).Replace("\"", "\"\"");
+            var status = (i.status ?? string.Empty).Replace("\"", "\"\"");
+            rows.Add($"\"{id}\",\"{cust}\",{i.amount},{i.dueDate:yyyy-MM-dd},\"{status}\"");
+        }
+        var csv = string.Join("\n", rows);
+        await JS.InvokeVoidAsync("voice.downloadFile", $"invoices_{DateTime.Now:yyyyMMdd}.csv", csv, "text/csv");
+    }
+
+    private async Task ExportCashFlowCsv()
+    {
+        if (_data is null || _data.projectedCashFlow is null) return;
+        var rows = new List<string>();
+        rows.Add("WeekEnd,Amount");
+        foreach (var p in _data.projectedCashFlow)
+        {
+            rows.Add($"{p.date:yyyy-MM-dd},{p.amount}");
+        }
+        var csv = string.Join("\n", rows);
+        await JS.InvokeVoidAsync("voice.downloadFile", $"cashflow_{DateTime.Now:yyyyMMdd}.csv", csv, "text/csv");
+    }
+
+    private void OpenInvoice(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return;
+        Nav.NavigateTo($"/invoices/{Uri.EscapeDataString(id)}");
+    }
+}

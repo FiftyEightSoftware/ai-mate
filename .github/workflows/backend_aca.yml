@@ -1,0 +1,85 @@
+name: backend-aca-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: "Container image reference (e.g., ghcr.io/<owner>/<repo>/backend:latest)"
+        required: true
+      resource_group:
+        description: "Azure Resource Group"
+        required: true
+      containerapp_name:
+        description: "Azure Container App name"
+        required: true
+      env_FRONTEND_ORIGINS:
+        description: "Comma-separated list of allowed frontend origins"
+        required: true
+      env_INVOICE_SEED_MIN:
+        description: "Invoice seed min"
+        required: false
+        default: "250"
+      env_INVOICE_SEED_MAX:
+        description: "Invoice seed max"
+        required: false
+        default: "450"
+      env_JOB_SEED_MIN:
+        description: "Job seed min"
+        required: false
+        default: "80"
+      env_JOB_SEED_MAX:
+        description: "Job seed max"
+        required: false
+        default: "200"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set image
+        id: img
+        run: echo "IMAGE=${{ inputs.image_ref }}" >> $GITHUB_OUTPUT
+
+      - name: Update Container App image and env vars
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -e
+            IMAGE="${{ steps.img.outputs.IMAGE }}"
+            RG="${{ inputs.resource_group }}"
+            APP="${{ inputs.containerapp_name }}"
+
+            # Update image
+            az containerapp update \
+              -g "$RG" -n "$APP" \
+              --image "$IMAGE"
+
+            # Update env vars
+            az containerapp update \
+              -g "$RG" -n "$APP" \
+              --set-env-vars \
+                FRONTEND_ORIGINS='${{ inputs.env_FRONTEND_ORIGINS }}' \
+                INVOICE_SEED_MIN='${{ inputs.env_INVOICE_SEED_MIN }}' \
+                INVOICE_SEED_MAX='${{ inputs.env_INVOICE_SEED_MAX }}' \
+                JOB_SEED_MIN='${{ inputs.env_JOB_SEED_MIN }}' \
+                JOB_SEED_MAX='${{ inputs.env_JOB_SEED_MAX }}' \
+                AIMATE_DB_PASSWORD='${{ secrets.AIMATE_DB_PASSWORD }}'
+
+      - name: Show app URL
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az containerapp show -g "${{ inputs.resource_group }}" -n "${{ inputs.containerapp_name }}" --query properties.configuration.ingress.fqdn -o tsv

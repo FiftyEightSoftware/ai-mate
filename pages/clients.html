@@ -1,0 +1,47 @@
+<!-- Search Bar -->
+<div class="search-bar">
+  <span class="search-icon">🔍</span>
+  <input type="text" class="search-input" placeholder="Search clients..." />
+  <button class="search-clear" aria-label="Clear search">×</button>
+</div>
+
+<ul class="list" id="clients-list">
+  <li class="list-item">
+    <div>
+      <div class="title">Client 1</div>
+      <div class="subtitle">No history</div>
+    </div>
+    <span>›</span>
+  </li>
+  <li class="list-item">
+    <div>
+      <div class="title">Client 2</div>
+      <div class="subtitle">No history</div>
+    </div>
+    <span>›</span>
+  </li>
+  <li class="list-item">
+    <div>
+      <div class="title">Client 3</div>
+      <div class="subtitle">No history</div>
+    </div>
+    <span>›</span>
+  </li>
+</ul>
+
+<!-- Empty State -->
+<div class="empty-state" style="display:none;" id="clients-empty">
+  <div class="empty-state-icon">👥</div>
+  <div class="empty-state-title">No Clients Found</div>
+  <div class="empty-state-subtitle">Add your first client to get started tracking jobs and invoices</div>
+  <button class="btn empty-state-cta">Add Client</button>
+</div>
+
+<!-- Floating Action Button -->
+<button class="fab" aria-label="Add new client" title="Add new client">+</button>
+
+<script>
+  document.querySelector('.fab').addEventListener('click', function() {
+    window.aiMate?.toast.info('Add client form coming soon!');
+  });
+</script>

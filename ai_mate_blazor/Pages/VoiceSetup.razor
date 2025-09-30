@@ -1,0 +1,388 @@
+@page "/voice-setup"
+@inject ai_mate_blazor.Services.VoiceStorageService Storage
+@inject IJSRuntime JS
+@inject ai_mate_blazor.Services.VoiceService Voice
+
+<h3>Voice Setup</h3>
+<p>Record or type a phrase for each action. Then use the floating mic to trigger them anywhere in the app.</p>
+
+<EditForm Model="this" OnValidSubmit="SaveAsync">
+    <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn" @onclick="ClearAllAsync" title="Clear all phrases">Clear All</button>
+        <button type="button" class="btn" @onclick="RestoreDefaultsAsync" title="Restore default actions">Restore Defaults</button>
+        <button type="button" class="btn" @onclick="ExportCsvAsync" title="Export prompts as CSV">Export CSV</button>
+        <button type="button" class="btn" @onclick="ImportCsvAsync" title="Import prompts from CSV">Import CSV</button>
+    </div>
+    <div class="list">
+        @foreach (var item in Items)
+        {
+            <div class="list-item" style="align-items:flex-start;gap:12px;">
+                <div style="flex:1;min-width:0;">
+                    <div class="title">@item.ActionName @if(item.Privileged){<span title="Privileged action" style="margin-left:6px;">🛡️</span>}</div>
+                    <div class="subtitle">Action key: <code>@item.ActionKey</code> @if(item.Hidden){<span style="margin-left:8px;color:#ffb265;">(Hidden)</span>}</div>
+                    <InputText @bind-Value="item.Phrase" class="form-control" placeholder="Say or type the phrase..." />
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button type="button" class="btn" @onclick="(() => RecordAsync(item))">🎙️ Record</button>
+                    <button type="button" class="btn" @onclick="(() => ClearAsync(item))">✕ Clear</button>
+                    <button type="button" class="btn" @onclick="(() => ToggleHidden(item))">@((item.Hidden ? "👁️ Show" : "🙈 Hide"))</button>
+                    <button type="button" class="btn" @onclick="(() => TogglePrivileged(item))">@((item.Privileged ? "🛡️ Unprotect" : "🛡️ Protect"))</button>
+                    <button type="button" class="btn" @onclick="(() => TestAsync(item))">🧪 Test</button>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button type="button" class="btn" disabled="@string.IsNullOrWhiteSpace(item.Phrase)" @onclick="(() => SimulateMenuAsync(item))">↗️ Simulate</button>
+                        <button type="button" class="btn" disabled="@string.IsNullOrWhiteSpace(item.Phrase)" @onclick="(() => CopyPhraseAsync(item))">📋 Copy</button>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button type="button" class="btn" @onclick="(() => MoveUp(item))">↑ Up</button>
+                        <button type="button" class="btn" @onclick="(() => MoveDown(item))">↓ Down</button>
+                        <button type="button" class="btn" @onclick="(() => DeleteItem(item))">🗑️ Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+    private static string CsvEscape(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var needsQuotes = s.IndexOf('"') >= 0 || s.IndexOf(',') >= 0;
+        var t = s.Replace("\"", "\"\"");
+        return needsQuotes ? $"\"{t}\"" : t;
+    }
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn" type="submit">💾 Save</button>
+        <button class="btn" type="button" @onclick="LoadAsync">↻ Reload</button>
+    </div>
+</EditForm>
+
+<div class="list" style="margin-top:16px;">
+    <div class="list-item" style="flex-wrap:wrap; gap:10px; align-items:center;">
+        <div style="flex:1; min-width:220px;">
+            <div class="title">Add New Prompt</div>
+            <div class="subtitle">Define a custom action. Use a unique action key (e.g., show_clients).</div>
+        </div>
+        <input class="form-control" placeholder="Action Name" @bind="NewActionName" style="min-width:160px;" />
+        <input class="form-control" placeholder="Action Key" @bind="NewActionKey" style="min-width:160px;" />
+        <input class="form-control" placeholder="Phrase (optional)" @bind="NewPhrase" style="min-width:200px;" />
+        <button class="btn" @onclick="AddNewAsync">Add</button>
+    </div>
+    @if (!string.IsNullOrEmpty(NewError))
+    {
+        <div class="list-item" style="background:#2a0e0e; border:1px solid #7a3030; color:#ffdada;">@NewError</div>
+    }
+    @if (!string.IsNullOrEmpty(NewInfo))
+    {
+        <div class="list-item" style="background:#11321a; border:1px solid #2e7a4b; color:#d6ffea;">@NewInfo</div>
+    }
+</div>
+
+@code {
+    public class ItemVM
+    {
+        public string ActionName { get; set; } = string.Empty;
+        public string ActionKey { get; set; } = string.Empty;
+        public string? Phrase { get; set; }
+        public bool Hidden { get; set; }
+        public bool Privileged { get; set; }
+    }
+
+    private List<ItemVM> Items = new();
+    private string? NewActionName;
+    private string? NewActionKey;
+    private string? NewPhrase;
+    private string? NewError;
+    private string? NewInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var existing = await Storage.GetAsync();
+        if (existing.Count > 0)
+        {
+            // Use stored order and include Hidden flags
+            Items = existing.Select(p => new ItemVM
+            {
+                ActionKey = p.ActionKey ?? string.Empty,
+                ActionName = p.ActionName ?? p.ActionKey ?? string.Empty,
+                Phrase = p.Phrase,
+                Hidden = p.Hidden,
+                Privileged = p.Privileged
+            }).ToList();
+            // Ensure any new defaults are appended if missing
+            var existingKeys = new HashSet<string>(Items.Select(i => i.ActionKey), StringComparer.OrdinalIgnoreCase);
+            foreach (var d in DefaultActions())
+            {
+                if (!existingKeys.Contains(d.ActionKey!))
+                {
+                    Items.Add(new ItemVM { ActionKey = d.ActionKey!, ActionName = d.ActionName! });
+                }
+            }
+        }
+        else
+        {
+            // Start from defaults
+            var defaults = DefaultActions();
+            Items = defaults.Select(d => new ItemVM
+            {
+                ActionKey = d.ActionKey!,
+                ActionName = d.ActionName!,
+                Phrase = null,
+                Hidden = false,
+                Privileged = false
+            }).ToList();
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        var prompts = Items.Select(x => new ai_mate_blazor.Models.VoicePrompt
+        {
+            ActionKey = x.ActionKey,
+            ActionName = x.ActionName,
+            Phrase = string.IsNullOrWhiteSpace(x.Phrase) ? null : x.Phrase,
+            Hidden = x.Hidden,
+            Privileged = x.Privileged
+        }).ToList();
+        await Storage.SaveAsync(prompts);
+        // Refresh voice service cache (privileged keys, etc.)
+        await Voice.InitializeAsync();
+    }
+
+    private async Task RecordAsync(ItemVM item)
+    {
+        try
+        {
+            var transcript = await JS.InvokeAsync<string>("voice.recordOnce");
+            if (!string.IsNullOrWhiteSpace(transcript))
+            {
+                item.Phrase = transcript;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Record error: {ex.Message}");
+        }
+    }
+
+    private Task ClearAsync(ItemVM item)
+    {
+        item.Phrase = null;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task ClearAllAsync()
+    {
+        foreach (var i in Items) i.Phrase = null;
+        await SaveAsync();
+    }
+
+    private async Task RestoreDefaultsAsync()
+    {
+        var defaults = DefaultActions();
+        Items = defaults.Select(d => new ItemVM
+        {
+            ActionKey = d.ActionKey!,
+            ActionName = d.ActionName!,
+            Phrase = null
+        }).ToList();
+        await SaveAsync();
+        StateHasChanged();
+    }
+    private async Task ExportCsvAsync()
+    {
+        var rows = new List<string>();
+        rows.Add("ActionKey,ActionName,Phrase,Hidden,Privileged");
+        foreach (var i in Items)
+        {
+            var key = CsvEscape(i.ActionKey);
+            var name = CsvEscape(i.ActionName);
+            var phrase = CsvEscape(i.Phrase);
+            rows.Add($"{key},{name},{phrase},{(i.Hidden ? "true" : "false")},{(i.Privileged ? "true" : "false")}");
+        }
+        var csv = string.Join("\n", rows);
+        await JS.InvokeVoidAsync("voice.downloadFile", "voice_prompts.csv", csv, "text/csv");
+    }
+
+    private async Task ImportCsvAsync()
+    {
+        try
+        {
+            var content = await JS.InvokeAsync<string?>("voice.pickFileText", "text/csv");
+            if (string.IsNullOrWhiteSpace(content)) return;
+            var lines = content.Split('\n');
+            if (lines.Length == 0) return;
+            var start = 0;
+            // skip header if detected
+            if (lines[0].Trim().StartsWith("ActionKey", StringComparison.OrdinalIgnoreCase)) start = 1;
+            var map = Items.ToDictionary(i => i.ActionKey, i => i, StringComparer.OrdinalIgnoreCase);
+            for (int i = start; i < lines.Length; i++)
+            {
+                var line = lines[i].TrimEnd('\r');
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                var parts = ParseCsvLine(line);
+                if (parts.Count < 2) continue;
+                var key = parts[0];
+                var name = parts.Count > 1 ? parts[1] : key;
+                var phrase = parts.Count > 2 ? parts[2] : null;
+                var hidden = parts.Count > 3 && bool.TryParse(parts[3], out var h) ? h : false;
+                var privileged = parts.Count > 4 && bool.TryParse(parts[4], out var pr) ? pr : false;
+                if (map.TryGetValue(key, out var item))
+                {
+                    item.ActionName = name;
+                    item.Phrase = string.IsNullOrWhiteSpace(phrase) ? null : phrase;
+                    item.Hidden = hidden;
+                    item.Privileged = privileged;
+                }
+                else
+                {
+                    Items.Add(new ItemVM { ActionKey = key, ActionName = name, Phrase = string.IsNullOrWhiteSpace(phrase) ? null : phrase, Hidden = hidden, Privileged = privileged });
+                }
+            }
+            await SaveAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Import CSV error: {ex.Message}");
+        }
+    }
+
+    private static List<string> ParseCsvLine(string line)
+    {
+        var res = new List<string>();
+        var cur = new System.Text.StringBuilder();
+        bool quoted = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            var c = line[i];
+            if (quoted)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"') { cur.Append('"'); i++; }
+                    else { quoted = false; }
+                }
+                else cur.Append(c);
+            }
+            else
+            {
+                if (c == ',') { res.Add(cur.ToString()); cur.Clear(); }
+                else if (c == '"') { quoted = true; }
+                else cur.Append(c);
+            }
+        }
+        res.Add(cur.ToString());
+        return res;
+    }
+
+    private static string CsvEscape(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        var needsQuotes = s.IndexOf('"') >= 0 || s.IndexOf(',') >= 0;
+        var t = s.Replace("\"", "\"\"");
+        return needsQuotes ? $"\"{t}\"" : t;
+    }
+
+    private void ToggleHidden(ItemVM item)
+    {
+        item.Hidden = !item.Hidden;
+        StateHasChanged();
+    }
+
+    private void TogglePrivileged(ItemVM item)
+    {
+        item.Privileged = !item.Privileged;
+        StateHasChanged();
+    }
+
+    private async Task TestAsync(ItemVM item)
+    {
+        await Voice.RunActionAsync(item.ActionKey);
+    }
+
+    private void DeleteItem(ItemVM item)
+    {
+        Items.Remove(item);
+        StateHasChanged();
+    }
+
+    private async Task SimulateMenuAsync(ItemVM item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Phrase))
+        {
+            await JS.InvokeVoidAsync("voice.prefillMenuSimulate", item.Phrase);
+            NewInfo = "Simulate menu opened with phrase. Click Run to simulate.";
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyPhraseAsync(ItemVM item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Phrase))
+        {
+            var ok = await JS.InvokeAsync<bool>("voice.copyText", item.Phrase);
+            NewInfo = ok ? "Phrase copied to clipboard" : "Copy failed";
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddNewAsync()
+    {
+        NewError = null; NewInfo = null;
+        var name = (NewActionName ?? string.Empty).Trim();
+        var key = (NewActionKey ?? string.Empty).Trim();
+        var phrase = string.IsNullOrWhiteSpace(NewPhrase) ? null : NewPhrase;
+        if (string.IsNullOrWhiteSpace(name)) { NewError = "Action Name is required"; return; }
+        if (string.IsNullOrWhiteSpace(key)) { NewError = "Action Key is required"; return; }
+        // Validate key format (letters, numbers, underscore)
+        if (!System.Text.RegularExpressions.Regex.IsMatch(key, "^[a-zA-Z0-9_]+$")) { NewError = "Action Key must be alphanumeric or underscore"; return; }
+        if (Items.Any(i => string.Equals(i.ActionKey, key, StringComparison.OrdinalIgnoreCase))) { NewError = "Action Key already exists"; return; }
+        Items.Add(new ItemVM { ActionKey = key, ActionName = name, Phrase = phrase, Hidden = false });
+        await SaveAsync();
+        NewActionName = NewActionKey = NewPhrase = null;
+        NewInfo = "Added new prompt";
+        StateHasChanged();
+    }
+
+    private void MoveUp(ItemVM item)
+    {
+        var idx = Items.IndexOf(item);
+        if (idx > 0)
+        {
+            Items.RemoveAt(idx);
+            Items.Insert(idx - 1, item);
+            StateHasChanged();
+        }
+    }
+
+    private void MoveDown(ItemVM item)
+    {
+        var idx = Items.IndexOf(item);
+        if (idx >= 0 && idx < Items.Count - 1)
+        {
+            Items.RemoveAt(idx);
+            Items.Insert(idx + 1, item);
+            StateHasChanged();
+        }
+    }
+
+    private static List<ai_mate_blazor.Models.VoicePrompt> DefaultActions() => new()
+    {
+        new() { ActionKey = "create_invoice", ActionName = "Create Invoice" },
+        new() { ActionKey = "show_payments", ActionName = "Show Payments" },
+        new() { ActionKey = "show_jobs", ActionName = "Show Jobs" },
+        new() { ActionKey = "create_job", ActionName = "Create Job" },
+        new() { ActionKey = "show_quotes", ActionName = "Show Quotes" },
+        new() { ActionKey = "show_clients", ActionName = "Show Clients" },
+        new() { ActionKey = "create_quote", ActionName = "Create Quote" },
+        new() { ActionKey = "show_invoices", ActionName = "Show Invoices" },
+        new() { ActionKey = "show_expenses", ActionName = "Show Expenses" },
+    };
+}

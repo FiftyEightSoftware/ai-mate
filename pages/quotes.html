@@ -1,0 +1,85 @@
+<!-- Search Bar -->
+<div class="search-bar">
+  <span class="search-icon">🔍</span>
+  <input type="text" class="search-input" placeholder="Search quotes..." />
+  <button class="search-clear" aria-label="Clear search">×</button>
+</div>
+
+<!-- Filter Chips -->
+<div class="filter-chips">
+  <button class="filter-chip active" data-filter="all">All</button>
+  <button class="filter-chip" data-filter="pending">Pending</button>
+  <button class="filter-chip" data-filter="accepted">Accepted</button>
+  <button class="filter-chip" data-filter="declined">Declined</button>
+</div>
+
+<!-- Quote List (Sample) -->
+<ul class="list" id="quote-list">
+  <li class="list-item" data-category="pending">
+    <div>
+      <div class="title">QT-001 • New Boiler Installation</div>
+      <div class="subtitle">John Smith • Sent 2 days ago</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 700;">£2,450.00</div>
+      <div class="subtitle">Pending</div>
+    </div>
+  </li>
+  <li class="list-item" data-category="accepted">
+    <div>
+      <div class="title">QT-002 • Bathroom Renovation</div>
+      <div class="subtitle">Jane Doe • Accepted yesterday</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 700; color: #2e7a4b;">£3,890.00</div>
+      <div class="subtitle" style="color: #2e7a4b;">Accepted</div>
+    </div>
+  </li>
+  <li class="list-item" data-category="declined">
+    <div>
+      <div class="title">QT-003 • Kitchen Remodel</div>
+      <div class="subtitle">ABC Corp • Declined last week</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 700; color: var(--muted);">£5,200.00</div>
+      <div class="subtitle">Declined</div>
+    </div>
+  </li>
+</ul>
+
+<!-- Empty State -->
+<div class="empty-state" style="display:none;" id="quotes-empty">
+  <div class="empty-state-icon">📝</div>
+  <div class="empty-state-title">No Quotes Found</div>
+  <div class="empty-state-subtitle">Create quotes to send estimates to your clients</div>
+  <button class="btn empty-state-cta">Create Quote</button>
+</div>
+
+<!-- Floating Action Button -->
+<button class="fab" aria-label="Add new quote" title="Add new quote">+</button>
+
+<script>
+  // Filter chips functionality
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      
+      const filter = this.dataset.filter;
+      const items = document.querySelectorAll('#quote-list .list-item');
+      
+      items.forEach(item => {
+        if (filter === 'all' || item.dataset.category === filter) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+  });
+  
+  // FAB click handler
+  document.querySelector('.fab').addEventListener('click', function() {
+    window.aiMate?.toast.info('Create quote form coming soon!');
+  });
+</script>

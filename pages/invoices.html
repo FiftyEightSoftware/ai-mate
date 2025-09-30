@@ -1,0 +1,82 @@
+<!-- Search Bar -->
+<div class="search-bar">
+  <span class="search-icon">🔍</span>
+  <input type="text" class="search-input" placeholder="Search invoices..." />
+  <button class="search-clear" aria-label="Clear search">×</button>
+</div>
+
+<!-- Filter Chips -->
+<div class="filter-chips">
+  <button class="filter-chip active" data-filter="all">All</button>
+  <button class="filter-chip" data-filter="outstanding">Outstanding</button>
+  <button class="filter-chip" data-filter="overdue">Overdue</button>
+  <button class="filter-chip" data-filter="paid">Paid</button>
+</div>
+
+<!-- Invoice List (Sample) -->
+<ul class="list" id="invoice-list">
+  <li class="list-item" data-category="outstanding">
+    <div>
+      <div class="title">INV-001 • John Smith</div>
+      <div class="subtitle">Due in 5 days • Outstanding</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 700;">£450.00</div>
+    </div>
+  </li>
+  <li class="list-item" data-category="overdue">
+    <div>
+      <div class="title">INV-002 • Jane Doe</div>
+      <div class="subtitle" style="color: #ffb265;">Overdue by 3 days</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 700; color: #ffb265;">£890.00</div>
+    </div>
+  </li>
+  <li class="list-item" data-category="paid">
+    <div>
+      <div class="title">INV-003 • ABC Ltd</div>
+      <div class="subtitle" style="color: #2e7a4b;">Paid on 15 Sep</div>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 700;">£1,250.00</div>
+    </div>
+  </li>
+</ul>
+
+<!-- Empty State -->
+<div class="empty-state" style="display:none;" id="invoices-empty">
+  <div class="empty-state-icon">💰</div>
+  <div class="empty-state-title">No Invoices Found</div>
+  <div class="empty-state-subtitle">Create your first invoice to start tracking payments</div>
+  <button class="btn empty-state-cta">Create Invoice</button>
+</div>
+
+<!-- Floating Action Button -->
+<button class="fab" aria-label="Add new invoice" title="Add new invoice">+</button>
+
+<script>
+  // Filter chips functionality
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+      
+      const filter = this.dataset.filter;
+      const items = document.querySelectorAll('#invoice-list .list-item');
+      
+      items.forEach(item => {
+        if (filter === 'all' || item.dataset.category === filter) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+  });
+  
+  // FAB click handler
+  document.querySelector('.fab').addEventListener('click', function() {
+    window.aiMate?.toast.info('Create invoice form coming soon!');
+  });
+</script>

@@ -1,0 +1,175 @@
+name: .NET Tests
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+            dotnet-version: '9.0.x'
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: |
+          dotnet restore "ai_mate_blazor.Tests/ai_mate_blazor.Tests.csproj"
+          dotnet restore "api.Tests/api.Tests.csproj"
+
+      - name: Build
+        run: |
+          dotnet build "ai_mate_blazor.Tests/ai_mate_blazor.Tests.csproj" --no-restore -c Release
+          dotnet build "api.Tests/api.Tests.csproj" --no-restore -c Release
+
+      - name: Test Blazor
+        run: dotnet test "ai_mate_blazor.Tests/ai_mate_blazor.Tests.csproj" --no-build -c Release --logger "trx;LogFileName=blazor.trx" --collect:"XPlat Code Coverage"
+
+      - name: Test API
+        run: dotnet test "api.Tests/api.Tests.csproj" --no-build -c Release --logger "trx;LogFileName=api.trx" --collect:"XPlat Code Coverage"
+
+      - name: Install ReportGenerator
+        run: dotnet tool update --global dotnet-reportgenerator-globaltool
+      - name: Generate Coverage Report
+        run: |
+          reportgenerator \
+            -reports:"**/TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"coverage-report" \
+            -reporttypes:TextSummary;Html;Badges;JsonSummary
+          cat coverage-report/Summary.txt || true
+
+      - name: Enforce Coverage Threshold (95% lines)
+        run: |
+          set -e
+          THRESHOLD=95
+          SUMMARY_FILE="coverage-report/Summary.txt"
+          if [ ! -f "$SUMMARY_FILE" ]; then
+            echo "Coverage summary not found at $SUMMARY_FILE"
+            exit 1
+          fi
+          echo "Coverage summary:\n" && cat "$SUMMARY_FILE"
+          # Extract the line coverage percentage from Summary.txt (format: 'Line coverage: XX.XX%')
+          LINE_COV=$(grep -i "Line coverage" "$SUMMARY_FILE" | sed -E 's/.*: ([0-9]+(\.[0-9]+)?)%.*/\1/')
+          if [ -z "$LINE_COV" ]; then
+            echo "Failed to parse line coverage from summary"
+            exit 1
+          fi
+          echo "Parsed line coverage: $LINE_COV%"
+          # Compare as integers by scaling
+          LINE_INT=$(printf '%.0f' "$(echo "$LINE_COV*100" | bc -l)")
+          THRESH_INT=$(($THRESHOLD*100))
+          if [ "$LINE_INT" -lt "$THRESH_INT" ]; then
+            echo "Line coverage $LINE_COV% is below threshold $THRESHOLD%"
+            exit 1
+          else
+            echo "Line coverage $LINE_COV% meets threshold $THRESHOLD%"
+          fi
+
+      - name: Enforce Per-Assembly Thresholds (ai_mate_blazor, api)
+        run: |
+          set -e
+          LINE_THRESHOLD=95
+          BRANCH_THRESHOLD=85
+          JSON_FILE="coverage-report/Summary.json"
+          if [ ! -f "$JSON_FILE" ]; then
+            echo "JSON summary not found at $JSON_FILE"
+            exit 1
+          fi
+          echo "Parsing per-assembly coverage from $JSON_FILE"
+          # Fail if jq is not present
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq not found; installing..."
+            sudo apt-get update && sudo apt-get install -y jq
+          fi
+          # Helper to check an assembly by name substring match
+          check_assembly() {
+            NAME_FILTER="$1"
+            echo "Checking assembly contains: $NAME_FILTER"
+            LINE_COV=$(jq -r --arg f "$NAME_FILTER" '[.reports[0].assemblies[] | select(.name | test($f; "i"))][0].linecoverage' "$JSON_FILE")
+            BRANCH_COV=$(jq -r --arg f "$NAME_FILTER" '[.reports[0].assemblies[] | select(.name | test($f; "i"))][0].branchcoverage' "$JSON_FILE")
+            if [ "$LINE_COV" = "null" ] || [ -z "$LINE_COV" ]; then
+              echo "Assembly matching '$NAME_FILTER' not found in coverage report; skipping"
+              return 0
+            fi
+            echo "Assembly match '$NAME_FILTER': line=$LINE_COV% branch=$BRANCH_COV%"
+            LINE_INT=$(printf '%.0f' "$(echo "$LINE_COV*100" | bc -l)")
+            BRANCH_INT=$(printf '%.0f' "$(echo "$BRANCH_COV*100" | bc -l)")
+            L_THRESH_INT=$(($LINE_THRESHOLD*100))
+            B_THRESH_INT=$(($BRANCH_THRESHOLD*100))
+            if [ "$LINE_INT" -lt "$L_THRESH_INT" ]; then
+              echo "FAIL: $NAME_FILTER line coverage $LINE_COV% < $LINE_THRESHOLD%"
+              exit 1
+            fi
+            if [ "$BRANCH_INT" -lt "$B_THRESH_INT" ]; then
+              echo "FAIL: $NAME_FILTER branch coverage $BRANCH_COV% < $BRANCH_THRESHOLD%"
+              exit 1
+            fi
+            echo "OK: $NAME_FILTER meets per-assembly thresholds"
+          }
+          check_assembly "ai_mate_blazor"
+          check_assembly "api"
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            **/*.trx
+            coverage-report/**
+
+      # Publish coverage-report to GitHub Pages on push to default branches (for stable badge & report URLs)
+      - name: Upload Pages artifact (coverage-report)
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: coverage-report
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push'
+        uses: actions/deploy-pages@v4
+
+      - name: Enforce Branch Coverage Threshold (85%)
+        run: |
+          set -e
+          THRESHOLD=85
+          SUMMARY_FILE="coverage-report/Summary.txt"
+          if [ ! -f "$SUMMARY_FILE" ]; then
+            echo "Coverage summary not found at $SUMMARY_FILE"
+            exit 1
+          fi
+          echo "Coverage summary:\n" && cat "$SUMMARY_FILE"
+          # Extract the branch coverage percentage from Summary.txt (format: 'Branch coverage: XX.XX%')
+          BRANCH_COV=$(grep -i "Branch coverage" "$SUMMARY_FILE" | sed -E 's/.*: ([0-9]+(\.[0-9]+)?)%.*/\1/')
+          if [ -z "$BRANCH_COV" ]; then
+            echo "Failed to parse branch coverage from summary"
+            exit 1
+          fi
+          echo "Parsed branch coverage: $BRANCH_COV%"
+          # Compare as integers by scaling
+          BRANCH_INT=$(printf '%.0f' "$(echo "$BRANCH_COV*100" | bc -l)")
+          THRESH_INT=$(($THRESHOLD*100))
+          if [ "$BRANCH_INT" -lt "$THRESH_INT" ]; then
+            echo "Branch coverage $BRANCH_COV% is below threshold $THRESHOLD%"
+            exit 1
+          else
+            echo "Branch coverage $BRANCH_COV% meets threshold $THRESHOLD%"
+          fi

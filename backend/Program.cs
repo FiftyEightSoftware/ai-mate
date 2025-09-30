@@ -2,8 +2,19 @@ using System.Text.Json.Serialization;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Data.Sqlite;
+using StackExchange.Redis;
+using AspNetCoreRateLimit;
+using Serilog;
+using Backend;
+
+// Configure Serilog
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .WriteTo.File("logs/ai-mate-.log", rollingInterval: RollingInterval.Day)
+    .CreateLogger();
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Host.UseSerilog();
 
 // Allow Blazor dev host and configurable production origins
 var corsPolicy = "blazor-dev";
@@ -39,6 +50,83 @@ builder.Services.Configure<FormOptions>(o =>
 {
     o.MultipartBodyLengthLimit = 50 * 1024 * 1024; // 50 MB
 });
+
+// Application Insights (optional)
+var appInsightsKey = builder.Configuration["ApplicationInsights:ConnectionString"];
+if (!string.IsNullOrWhiteSpace(appInsightsKey))
+{
+    builder.Services.AddApplicationInsightsTelemetry();
+}
+
+// Redis Configuration (optional, falls back to in-memory)
+var redisConnection = Environment.GetEnvironmentVariable("REDIS_CONNECTION") ?? builder.Configuration["Redis:Connection"];
+IConnectionMultiplexer? redis = null;
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    try
+    {
+        redis = ConnectionMultiplexer.Connect(redisConnection);
+        builder.Services.AddSingleton(redis);
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnection;
+            options.InstanceName = "AIMate_";
+        });
+        Log.Information("Redis connected: {Connection}", redisConnection);
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Redis connection failed, falling back to in-memory cache");
+        builder.Services.AddDistributedMemoryCache();
+    }
+}
+else
+{
+    Log.Information("Redis not configured, using in-memory cache");
+    builder.Services.AddDistributedMemoryCache();
+}
+
+// Register cache service
+builder.Services.AddSingleton<ICacheService, CacheService>();
+
+// Rate Limiting
+builder.Services.AddMemoryCache();
+builder.Services.Configure<IpRateLimitOptions>(options =>
+{
+    options.EnableEndpointRateLimiting = true;
+    options.StackBlockedRequests = false;
+    options.GeneralRules = new List<RateLimitRule>
+    {
+        new RateLimitRule
+        {
+            Endpoint = "*",
+            Period = "1m",
+            Limit = 100 // 100 requests per minute
+        },
+        new RateLimitRule
+        {
+            Endpoint = "*",
+            Period = "1h",
+            Limit = 1000 // 1000 requests per hour
+        }
+    };
+});
+builder.Services.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>();
+builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+
+// Health Checks
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database")
+    .AddCheck<RedisHealthCheck>("redis")
+    .AddCheck<MemoryHealthCheck>("memory");
+
+// Metrics collection
+builder.Services.AddSingleton<MetricsCollector>();
+
+// Database migrations
+builder.Services.AddSingleton<DatabaseMigrations>();
 
 // Initialize SQLCipher (requires SQLitePCLRaw.bundle_e_sqlcipher package)
 SQLitePCL.Batteries_V2.Init();
@@ -100,10 +188,63 @@ builder.Services.AddSingleton<InvoiceRepository>(sp =>
 });
 
 var app = builder.Build();
+
+// Run database migrations
+using (var scope = app.Services.CreateScope())
+{
+    var migrations = scope.ServiceProvider.GetRequiredService<DatabaseMigrations>();
+    try
+    {
+        await migrations.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Failed to run database migrations");
+    }
+}
+
+// Performance metrics middleware
+app.UseMiddleware<PerformanceMetricsMiddleware>();
+
+// Rate limiting middleware
+app.UseIpRateLimiting();
+
 app.UseCors(corsPolicy);
 
-app.MapGet("/api/health", () => Results.Ok(new { ok = true, time = DateTimeOffset.UtcNow }))
-   .WithName("Health");
+// Enhanced health checks endpoint
+app.MapHealthChecks("/api/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        var result = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            ok = report.Status == Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy,
+            status = report.Status.ToString(),
+            time = DateTimeOffset.UtcNow,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                description = e.Value.Description,
+                duration = e.Value.Duration.TotalMilliseconds
+            })
+        });
+        await context.Response.WriteAsync(result);
+    }
+}).WithName("Health");
+
+// Simple health endpoint for quick checks
+app.MapGet("/health", () => Results.Ok(new { ok = true }))
+   .WithName("HealthSimple");
+
+// Metrics endpoint (performance monitoring)
+app.MapGet("/api/metrics", (MetricsCollector metrics, HttpRequest req) =>
+{
+    var windowMinutes = int.TryParse(req.Query["window"], out var w) ? w : 5;
+    var summary = metrics.GetSummary(TimeSpan.FromMinutes(windowMinutes));
+    return Results.Ok(summary);
+}).WithName("Metrics");
 
 // (records moved to the end of file to avoid mixing type declarations with top-level statements)
 

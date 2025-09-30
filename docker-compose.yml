@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "5280:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - FRONTEND_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+      - AIMATE_DB_PASSWORD=dev-password
+      - REDIS_CONNECTION=redis:6379
+      - ApplicationInsights__ConnectionString=${APPLICATIONINSIGHTS_CONNECTION_STRING}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+    networks:
+      - ai-mate-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - ai-mate-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:5280
+    networks:
+      - ai-mate-network
+    depends_on:
+      - backend
+
+volumes:
+  redis-data:
+
+networks:
+  ai-mate-network:
+    driver: bridge

@@ -1,0 +1,47 @@
+# Fly.io deployment configuration
+app = "ai-mate"
+primary_region = "lhr"  # London for EU users
+
+[build]
+  dockerfile = "backend/Dockerfile"
+
+[env]
+  ASPNETCORE_URLS = "http://0.0.0.0:8080"
+  ASPNETCORE_ENVIRONMENT = "Production"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.http_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/api/health"
+
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "30s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+
+[deploy]
+  strategy = "rolling"
+
+[[mounts]]
+  source = "aimate_data"
+  destination = "/app/data"

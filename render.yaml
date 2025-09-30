@@ -1,0 +1,60 @@
+services:
+  # Backend API
+  - type: web
+    name: ai-mate-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:8080
+      - key: AIMATE_DB_PASSWORD
+        generateValue: true
+      - key: REDIS_CONNECTION
+        fromService:
+          name: ai-mate-redis
+          type: redis
+          property: connectionString
+      - key: FRONTEND_ORIGINS
+        value: https://ai-mate.onrender.com
+    healthCheckPath: /api/health
+    autoDeploy: true
+    
+  # Redis Cache
+  - type: redis
+    name: ai-mate-redis
+    ipAllowList: []
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    
+  # Frontend (Static Site)
+  - type: web
+    name: ai-mate-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: ai-mate-api
+          type: web
+          property: host
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://ai-mate-api.onrender.com/api/:splat
+      - type: rewrite
+        source: /voice/*
+        destination: https://ai-mate-api.onrender.com/voice/:splat
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-XSS-Protection
+        value: 1; mode=block
+    autoDeploy: true

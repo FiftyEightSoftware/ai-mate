@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#c8793e" />
+    <link rel="manifest" href="/assets/manifest-CBZJmvu9.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/icon-192-DEQ7WaBI.png" />
+    <title>AI-Mate</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-2fY4Z0n7kWb3QO6cJx1vrNwI3Qw5bS5n6b6LJ3G7wYhKqR6m2z2mJx2mYwM2lB6l" crossorigin="anonymous"></script>
+    <script type="module" crossorigin src="/assets/index-pARWHwIe.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DBsp4FLg.css">
+  </head>
+  <body>
+    <div id="splash" class="splash">
+      <div class="splash-inner">
+        <img src="/assets/Brand-Cnftb2D1.png" alt="AI-Mate brand" />
+        <div class="spinner" role="status"><span class="sr-only">Loading…</span></div>
+      </div>
+    </div>
+    <div class="app-shell">
+      <header class="toolbar">
+        <h1 id="title">Home</h1>
+      </header>
+      <main id="content" class="content"
+            hx-get="/pages/home.html"
+            hx-trigger="load"
+            hx-swap="innerHTML transition:true">
+      </main>
+      <nav class="bottom-nav">
+        <a href="/pages/home.html" data-title="Home" class="tab" hx-get="/pages/home.html" hx-push-url="true" hx-target="#content" hx-swap="innerHTML">🏠 <span>Home</span></a>
+        <a href="/pages/jobs.html" data-title="Jobs" class="tab" hx-get="/pages/jobs.html" hx-push-url="true" hx-target="#content" hx-swap="innerHTML">🛠️ <span>Jobs</span></a>
+        <a href="/pages/assistant.html" data-title="Mate" class="tab" hx-get="/pages/assistant.html" hx-push-url="true" hx-target="#content" hx-swap="innerHTML">🎙️ <span>Mate</span></a>
+        <a href="/pages/clients.html" data-title="Clients" class="tab" hx-get="/pages/clients.html" hx-push-url="true" hx-target="#content" hx-swap="innerHTML">👤 <span>Clients</span></a>
+        <a href="/pages/settings.html" data-title="Settings" class="tab" hx-get="/pages/settings.html" hx-push-url="true" hx-target="#content" hx-swap="innerHTML">⚙️ <span>Settings</span></a>
+      </nav>
+    </div>
+
+    <script>
+      const routeTitles = new Map([
+        ['/', 'Home'],
+        ['/index.html', 'Home'],
+        ['/pages/home.html', 'Home'],
+        ['/pages/jobs.html', 'Jobs'],
+        ['/pages/quotes.html', 'Quotes'],
+        ['/pages/invoices.html', 'Invoices'],
+        ['/pages/expenses.html', 'Expenses'],
+        ['/pages/clients.html', 'Clients'],
+        ['/pages/assistant.html', 'Mate'],
+        ['/pages/settings.html', 'Settings'],
+      ]);
+
+      const tabOrder = ['/pages/home.html','/pages/jobs.html','/pages/assistant.html','/pages/clients.html','/pages/settings.html'];
+      function indexForPath(p){
+        const norm = (p === '/' || p === '/index.html') ? '/pages/home.html' : p;
+        const i = tabOrder.indexOf(norm);
+        return i === -1 ? 0 : i;
+      }
+      let lastIndex = 0;
+
+      function setActiveTabByPath(pathname){
+        document.querySelectorAll('a.tab').forEach(a => a.classList.remove('active'));
+        const match = Array.from(document.querySelectorAll('a.tab')).find(a => {
+          try { return new URL(a.getAttribute('href'), location.origin).pathname === pathname } catch { return false }
+        });
+        if (match) match.classList.add('active');
+      }
+
+      function updateUIFromLocation(){
+        const p = location.pathname || '/';
+        const title = routeTitles.get(p) || 'AI-Mate';
+        document.getElementById('title').textContent = title;
+        setActiveTabByPath(p);
+        // set slide direction based on nav order
+        const content = document.getElementById('content');
+        const idx = indexForPath(p);
+        content.dataset.dir = idx >= lastIndex ? 'forward' : 'back';
+        lastIndex = idx;
+        // If navigating directly (back/forward), load content
+        const targetUrl = p === '/' || p === '/index.html' ? '/pages/home.html' : p;
+        if (content && content.getAttribute('data-current') !== targetUrl) {
+          htmx.ajax('GET', targetUrl, { target: '#content', swap: 'innerHTML' });
+          content.setAttribute('data-current', targetUrl);
+        }
+      }
+
+      // Simple page title sync based on clicked tab
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest('a.tab');
+        if (a && a.dataset.title) {
+          document.getElementById('title').textContent = a.dataset.title;
+          const hrefPath = new URL(a.getAttribute('href'), location.origin).pathname;
+          setActiveTabByPath(hrefPath);
+          // set slide direction
+          const content = document.getElementById('content');
+          const idx = indexForPath(hrefPath);
+          content.dataset.dir = idx >= lastIndex ? 'forward' : 'back';
+        }
+      });
+
+      // Add a subtle fade-in on content swaps
+      document.body.addEventListener('htmx:afterSwap', (evt) => {
+        if (evt.target.id === 'content') {
+          evt.target.classList.remove('fade');
+          // force reflow
+          void evt.target.offsetWidth;
+          evt.target.classList.add('fade');
+          // hide splash after first page load
+          const s = document.getElementById('splash');
+          if (s && !s.classList.contains('hidden')) {
+            s.classList.add('hidden');
+          }
+          // Track current content URL for back/forward sync
+          const resInfo = evt.detail && evt.detail.pathInfo && evt.detail.pathInfo.requestPath;
+          if (resInfo) {
+            document.getElementById('content').setAttribute('data-current', resInfo);
+            lastIndex = indexForPath(new URL(resInfo, location.origin).pathname);
+          }
+        }
+      });
+
+      // If content is cached/instant, ensure splash hides quickly after DOM ready
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const s = document.getElementById('splash');
+          if (s) s.classList.add('hidden');
+        }, 250);
+        updateUIFromLocation();
+      });
+
+      // Sync when HTMX pushes into history
+      document.body.addEventListener('htmx:pushedIntoHistory', () => updateUIFromLocation());
+      // Sync on browser back/forward
+      window.addEventListener('popstate', () => updateUIFromLocation());
+    </script>
+  </body>
+  </html>

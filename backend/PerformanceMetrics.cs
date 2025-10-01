@@ -42,8 +42,11 @@ public class PerformanceMetricsMiddleware
                 );
             }
             
-            // Add performance header
-            context.Response.Headers["X-Response-Time-Ms"] = elapsed.ToString();
+            // Add performance header if response hasn't started
+            if (!context.Response.HasStarted)
+            {
+                context.Response.Headers["X-Response-Time-Ms"] = elapsed.ToString();
+            }
         }
     }
 }

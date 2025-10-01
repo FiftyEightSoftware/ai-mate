@@ -117,10 +117,15 @@ builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>()
 builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
 
 // Health Checks
-builder.Services.AddHealthChecks()
+var healthChecks = builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database")
-    .AddCheck<RedisHealthCheck>("redis")
     .AddCheck<MemoryHealthCheck>("memory");
+
+// Only add Redis health check if Redis is configured
+if (redis != null)
+{
+    healthChecks.AddCheck<RedisHealthCheck>("redis");
+}
 
 // Metrics collection
 builder.Services.AddSingleton<MetricsCollector>();

@@ -37,20 +37,15 @@ public class DatabaseHealthCheck : IHealthCheck
 
 public class RedisHealthCheck : IHealthCheck
 {
-    private readonly IConnectionMultiplexer? _redis;
+    private readonly IConnectionMultiplexer _redis;
 
-    public RedisHealthCheck(IConnectionMultiplexer? redis)
+    public RedisHealthCheck(IConnectionMultiplexer redis)
     {
         _redis = redis;
     }
 
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        if (_redis == null)
-        {
-            return HealthCheckResult.Degraded("Redis not configured");
-        }
-
         try
         {
             var db = _redis.GetDatabase();

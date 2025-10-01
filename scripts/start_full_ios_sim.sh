@@ -23,8 +23,10 @@ BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="${FRONTEND_DIR:-$ROOT_DIR/ai_mate_blazor}"
 # Configurable frontend port; derive APP_URL from it by default
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
-FRONTEND_CMD=${FRONTEND_CMD:-dotnet run --urls "http://localhost:${FRONTEND_PORT}"}
-APP_URL="${APP_URL:-http://localhost:${FRONTEND_PORT}}"
+# Get the local IP address for iOS Simulator to access host machine
+LOCAL_IP=$(ipconfig getifaddr en0 || ipconfig getifaddr en1 || echo "localhost")
+FRONTEND_CMD=${FRONTEND_CMD:-dotnet run --urls "http://0.0.0.0:${FRONTEND_PORT}"}
+APP_URL="${APP_URL:-http://${LOCAL_IP}:${FRONTEND_PORT}}"
 SIM_DEVICE="${SIM_DEVICE:-}"
 RESEED="${RESEED:-1}"
 
@@ -41,7 +43,7 @@ pushd "$BACKEND_DIR" >/dev/null
   dotnet restore
   echo "[INFO] Starting backend on http://0.0.0.0:5280 ..."
   # Pass seeding bounds and CORS origins to backend
-  FRONTEND_ORIGINS="http://localhost:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT}" \
+  FRONTEND_ORIGINS="http://localhost:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://${LOCAL_IP}:${FRONTEND_PORT}" \
   INVOICE_SEED_MIN="${INVOICE_SEED_MIN:-250}" INVOICE_SEED_MAX="${INVOICE_SEED_MAX:-450}" \
   JOB_SEED_MIN="${JOB_SEED_MIN:-80}" JOB_SEED_MAX="${JOB_SEED_MAX:-200}" \
   ${AIMATE_DB_PASSWORD:+AIMATE_DB_PASSWORD="$AIMATE_DB_PASSWORD"} dotnet run --urls "http://0.0.0.0:5280" &
@@ -51,6 +53,13 @@ popd >/dev/null
 
 # Start frontend
 pushd "$FRONTEND_DIR" >/dev/null
+  echo "[INFO] Configuring frontend API_BASE to http://${LOCAL_IP}:5280 ..."
+  # Create appsettings.json with the correct API_BASE for iOS Simulator
+  cat > wwwroot/appsettings.json <<EOF
+{
+  "API_BASE": "http://${LOCAL_IP}:5280"
+}
+EOF
   echo "[INFO] Starting frontend: $FRONTEND_CMD (in $FRONTEND_DIR) ..."
   bash -lc "$FRONTEND_CMD" &
   FRONTEND_PID=$!
@@ -116,7 +125,7 @@ if [[ -z "$SIM_DEVICE" ]]; then
     if xcrun simctl list devices available | grep -q "$name"; then SIM_DEVICE="$name"; break; fi
   done
   if [[ -z "$SIM_DEVICE" ]]; then
-    SIM_DEVICE=$(xcrun simctl list devices available | grep -m1 -E "iPhone" | sed -E 's/^\s*([^\(]+) \(([^\)]+)\).*/\1/' | head -n1)
+    SIM_DEVICE=$(xcrun simctl list devices available | grep -m1 -E "iPhone" | sed -E 's/^\s*([^\(]+) \(([^\)]+)\).*/\1/' | xargs)
   fi
 fi
 

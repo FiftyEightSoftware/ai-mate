@@ -411,3 +411,4 @@
 /Users/nickphinesme.com/Developer/AI Mate/api.Tests/obj/Debug/net9.0/api.Tests.pdb
 /Users/nickphinesme.com/Developer/AI Mate/api.Tests/obj/Debug/net9.0/api.Tests.genruntimeconfig.cache
 /Users/nickphinesme.com/Developer/AI Mate/api.Tests/obj/Debug/net9.0/ref/api.Tests.dll
+/Users/nickphinesme.com/Developer/AI Mate/api.Tests/bin/Debug/net9.0/CoverletSourceRootsMapping_api.Tests

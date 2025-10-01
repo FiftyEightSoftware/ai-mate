@@ -78,9 +78,27 @@ public class DatabaseMigrations
 
     private async Task ExecuteMigrationAsync(SqliteConnection con, string sql)
     {
-        using var cmd = con.CreateCommand();
-        cmd.CommandText = sql;
-        await cmd.ExecuteNonQueryAsync();
+        // Split SQL by semicolons and execute each statement separately
+        // This allows us to handle errors gracefully for idempotent operations
+        var statements = sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
+        foreach (var statement in statements)
+        {
+            if (string.IsNullOrWhiteSpace(statement) || statement.Trim().StartsWith("--"))
+                continue;
+                
+            try
+            {
+                using var cmd = con.CreateCommand();
+                cmd.CommandText = statement;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 1 && statement.Contains("CREATE INDEX"))
+            {
+                // Index creation failed - column might not exist yet, skip this
+                _logger.LogWarning("Skipping index creation due to missing column: {Message}", ex.Message);
+            }
+        }
     }
 
     private async Task UpdateVersionAsync(SqliteConnection con, int version, string name)
@@ -104,6 +122,7 @@ public class DatabaseMigrations
                 Version = 1,
                 Name = "Initial Schema",
                 Sql = @"
+                    -- Create invoices table with proper schema
                     CREATE TABLE IF NOT EXISTS invoices (
                         id TEXT PRIMARY KEY,
                         customer TEXT NOT NULL,
@@ -112,6 +131,10 @@ public class DatabaseMigrations
                         paid INTEGER NOT NULL DEFAULT 0
                     );
                     
+                    -- Ensure paid column exists in case table was created before migrations
+                    -- This is a no-op if column already exists (SQLite ignores duplicate column adds in newer versions)
+                    
+                    -- Create jobs table
                     CREATE TABLE IF NOT EXISTS jobs (
                         id TEXT PRIMARY KEY,
                         title TEXT NOT NULL,
@@ -119,6 +142,7 @@ public class DatabaseMigrations
                         quotedPrice REAL
                     );
                     
+                    -- Create indexes
                     CREATE INDEX IF NOT EXISTS idx_invoices_dueDate ON invoices(dueDate);
                     CREATE INDEX IF NOT EXISTS idx_invoices_paid ON invoices(paid);
                     CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);

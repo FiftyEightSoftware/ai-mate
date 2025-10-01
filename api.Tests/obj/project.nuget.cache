@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "Mpmjq40QUj0=",
+  "dgSpecHash": "+JTeT4CX6ow=",
   "success": true,
   "projectFilePath": "/Users/nickphinesme.com/Developer/AI Mate/api.Tests/api.Tests.csproj",
   "expectedPackageFiles": [
+    "/Users/nickphinesme.com/.nuget/packages/coverlet.collector/6.0.2/coverlet.collector.6.0.2.nupkg.sha512",
     "/Users/nickphinesme.com/.nuget/packages/microsoft.aspnetcore.mvc.testing/9.0.0/microsoft.aspnetcore.mvc.testing.9.0.0.nupkg.sha512",
     "/Users/nickphinesme.com/.nuget/packages/microsoft.aspnetcore.testhost/9.0.0/microsoft.aspnetcore.testhost.9.0.0.nupkg.sha512",
     "/Users/nickphinesme.com/.nuget/packages/microsoft.codecoverage/17.11.1/microsoft.codecoverage.17.11.1.nupkg.sha512",

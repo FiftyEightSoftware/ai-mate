@@ -56,6 +56,11 @@
               "target": "Package",
               "version": "[17.11.1, )"
             },
+            "coverlet.collector": {
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[6.0.2, )"
+            },
             "xunit": {
               "target": "Package",
               "version": "[2.9.0, )"

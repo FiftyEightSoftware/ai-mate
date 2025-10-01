@@ -40,6 +40,7 @@
           "Microsoft.AspNetCore.Mvc.Testing": "9.0.0",
           "Microsoft.NET.Test.Sdk": "17.11.1",
           "api": "1.0.0",
+          "coverlet.collector": "6.0.2",
           "xunit": "2.9.0",
           "xunit.runner.visualstudio": "2.8.2",
           "Microsoft.AspNetCore.Antiforgery": "9.0.0.0",
@@ -352,6 +353,7 @@
           "api.Tests.dll": {}
         }
       },
+      "coverlet.collector/6.0.2": {},
       "Microsoft.AspNetCore.Mvc.Testing/9.0.0": {
         "dependencies": {
           "Microsoft.AspNetCore.TestHost": "9.0.0",
@@ -2770,6 +2772,13 @@
       "type": "project",
       "serviceable": false,
       "sha512": ""
+    },
+    "coverlet.collector/6.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-bJShQ6uWRTQ100ZeyiMqcFlhP7WJ+bCuabUs885dJiBEzMsJMSFr7BOyeCw4rgvQokteGi5rKQTlkhfQPUXg2A==",
+      "path": "coverlet.collector/6.0.2",
+      "hashPath": "coverlet.collector.6.0.2.nupkg.sha512"
     },
     "Microsoft.AspNetCore.Mvc.Testing/9.0.0": {
       "type": "package",

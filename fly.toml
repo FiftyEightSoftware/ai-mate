@@ -1,47 +1,22 @@
-# Fly.io deployment configuration
-app = "ai-mate"
-primary_region = "lhr"  # London for EU users
+# fly.toml app configuration file generated for ai-mate-backend on 2025-10-01T01:34:54+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'ai-mate-backend'
+primary_region = 'lhr'
 
 [build]
-  dockerfile = "backend/Dockerfile"
 
-[env]
-  ASPNETCORE_URLS = "http://0.0.0.0:8080"
-  ASPNETCORE_ENVIRONMENT = "Production"
-
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-
-  [[services.ports]]
-    handlers = ["http"]
-    port = 80
-    force_https = true
-
-  [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-
-  [[services.http_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "30s"
-    method = "GET"
-    path = "/api/health"
-
-  [[services.tcp_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "30s"
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 256
-
-[deploy]
-  strategy = "rolling"
-
-[[mounts]]
-  source = "aimate_data"
-  destination = "/app/data"

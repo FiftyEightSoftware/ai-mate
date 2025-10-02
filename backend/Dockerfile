@@ -16,8 +16,6 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 
-# Environment
-ENV ASPNETCORE_URLS=http://0.0.0.0:${PORT:-5000}
 # Configure data directory under /app/data
 ENV DOTNET_EnableDiagnostics=0
 

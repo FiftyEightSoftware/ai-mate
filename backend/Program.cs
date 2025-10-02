@@ -216,7 +216,8 @@ builder.Services.AddSingleton<InvoiceRepository>(sp =>
 var app = builder.Build();
 
 // Ultra-minimal health check for Render (before any middleware or migrations)
-app.MapGet("/health", () => Results.Ok(new { ok = true, timestamp = DateTime.UtcNow }))
+// MUST be at /api/health to match Render's health check configuration
+app.MapGet("/api/health", () => Results.Ok(new { ok = true, timestamp = DateTime.UtcNow, service = "ai-mate-api" }))
    .WithName("HealthMinimal");
 
 // Run database migrations
@@ -244,28 +245,28 @@ app.UseIpRateLimiting();
 
 app.UseCors(corsPolicy);
 
-// Enhanced health checks endpoint
-app.MapHealthChecks("/api/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-{
-    ResponseWriter = async (context, report) =>
-    {
-        context.Response.ContentType = "application/json";
-        var result = System.Text.Json.JsonSerializer.Serialize(new
-        {
-            ok = report.Status == Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy,
-            status = report.Status.ToString(),
-            time = DateTimeOffset.UtcNow,
-            checks = report.Entries.Select(e => new
-            {
-                name = e.Key,
-                status = e.Value.Status.ToString(),
-                description = e.Value.Description,
-                duration = e.Value.Duration.TotalMilliseconds
-            })
-        });
-        await context.Response.WriteAsync(result);
-    }
-}).WithName("Health");
+// Enhanced health checks endpoint (commented out - using minimal version above for faster startup)
+// app.MapHealthChecks("/api/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+// {
+//     ResponseWriter = async (context, report) =>
+//     {
+//         context.Response.ContentType = "application/json";
+//         var result = System.Text.Json.JsonSerializer.Serialize(new
+//         {
+//             ok = report.Status == Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy,
+//             status = report.Status.ToString(),
+//             time = DateTimeOffset.UtcNow,
+//             checks = report.Entries.Select(e => new
+//             {
+//                 name = e.Key,
+//                 status = e.Value.Status.ToString(),
+//                 description = e.Value.Description,
+//                 duration = e.Value.Duration.TotalMilliseconds
+//             })
+//         });
+//         await context.Response.WriteAsync(result);
+//     }
+// }).WithName("Health");
 
 // Metrics endpoint (performance monitoring)
 app.MapGet("/api/metrics", (MetricsCollector metrics, HttpRequest req) =>

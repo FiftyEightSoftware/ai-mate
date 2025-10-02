@@ -31,3 +31,6 @@ key.properties
 
 # Local Netlify folder
 .netlify
+publish/
+ai-mate-frontend.zip
+.netlify-url.txt

@@ -16,6 +16,9 @@ Log.Logger = new LoggerConfiguration()
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
+// Add OpenTelemetry instrumentation
+builder.Services.AddOpenTelemetryInstrumentation(builder.Configuration);
+
 // Allow Blazor dev host and configurable production origins
 var corsPolicy = "blazor-dev";
 builder.Services.AddCors(options =>
@@ -208,6 +211,9 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// OpenTelemetry API metrics middleware
+app.UseMiddleware<ApiMetricsMiddleware>();
+
 // Performance metrics middleware
 app.UseMiddleware<PerformanceMetricsMiddleware>();
 
@@ -391,6 +397,8 @@ app.MapGet("/api/jobs", async (SqliteConnection conn) =>
 
 app.MapPost("/api/jobs", async (HttpRequest req, SqliteConnection conn) =>
 {
+    using var activity = OpenTelemetryConfig.StartActivity("CreateJob");
+    
     var payload = await req.ReadFromJsonAsync<Dictionary<string, object?>>();
     var title = Convert.ToString(payload?.GetValueOrDefault("title"));
     if (string.IsNullOrWhiteSpace(title)) return Results.BadRequest(new { ok = false, error = "title is required" });
@@ -403,6 +411,11 @@ app.MapPost("/api/jobs", async (HttpRequest req, SqliteConnection conn) =>
         try { quoted = Convert.ToDecimal(qv); } catch { quoted = null; }
     }
     var id = Guid.NewGuid().ToString("N");
+    
+    activity?.SetTag("job.title", title);
+    activity?.SetTag("job.status", status);
+    if (quoted.HasValue) activity?.SetTag("job.quoted_price", quoted.Value);
+    
     using var con = new SqliteConnection(conn.ConnectionString);
     await con.OpenAsync();
     using var ins = con.CreateCommand();
@@ -412,12 +425,19 @@ app.MapPost("/api/jobs", async (HttpRequest req, SqliteConnection conn) =>
     ins.Parameters.AddWithValue("$status", status);
     ins.Parameters.AddWithValue("$price", (object?)quoted ?? DBNull.Value);
     await ins.ExecuteNonQueryAsync();
+    
+    OpenTelemetryConfig.JobCreated.Add(1);
+    if (quoted.HasValue) OpenTelemetryConfig.JobQuoteAmount.Record(quoted.Value);
+    
     return Results.Ok(new { id, title, status, quotedPrice = quoted });
 });
 
 // Dashboard (real data)
 app.MapGet("/api/dashboard", async (HttpRequest req, InvoiceRepository repo) =>
 {
+    using var activity = OpenTelemetryConfig.StartActivity("GetDashboard");
+    OpenTelemetryConfig.DashboardViewed.Add(1);
+    
     int weeks = 8;
     if (int.TryParse(req.Query["weeks"], out var w)) weeks = Math.Clamp(w, 4, 12);
     var today = DateOnly.FromDateTime(DateTime.Today);
@@ -437,6 +457,11 @@ app.MapGet("/api/dashboard", async (HttpRequest req, InvoiceRepository repo) =>
     var paidLast30 = await repo.GetPaidLastDaysAsync(30);
 
     var invDto = invoices.Select(i => new DashboardInvoice(i.Id, i.Customer, i.Amount, i.DueDate.ToDateTime(TimeOnly.MinValue), i.DueDate < today ? "overdue" : (i.DueDate <= today.AddDays(7) ? "due_soon" : "outstanding"))).ToList();
+    
+    activity?.SetTag("invoice.count", invoices.Count);
+    activity?.SetTag("outstanding.total", outstanding);
+    activity?.SetTag("overdue.total", overdue);
+    
     return Results.Ok(new DashboardResponse(outstanding, overdue, dueSoon, paidLast30, invDto, projected));
 });
 
@@ -451,9 +476,23 @@ app.MapGet("/api/invoices", async (HttpRequest req, InvoiceRepository repo) =>
 // Mark invoice paid
 app.MapPost("/api/invoices/{id}/mark-paid", async (string id, HttpRequest req, InvoiceRepository repo) =>
 {
+    using var activity = OpenTelemetryConfig.StartActivity("MarkInvoicePaid");
+    activity?.SetTag("invoice.id", id);
+    
     var payload = await req.ReadFromJsonAsync<MarkPaidPayload>();
     var date = payload?.paidDate ?? DateTime.Today;
     var ok = await repo.MarkInvoicePaidAsync(id, DateOnly.FromDateTime(date));
+    
+    if (ok)
+    {
+        OpenTelemetryConfig.InvoicePaid.Add(1);
+        activity?.SetTag("result", "success");
+    }
+    else
+    {
+        activity?.SetTag("result", "not_found");
+    }
+    
     return ok ? Results.Ok(new { ok = true }) : Results.NotFound();
 });
 

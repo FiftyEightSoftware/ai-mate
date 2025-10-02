@@ -99,20 +99,6 @@ public static class OpenTelemetryConfig
             .WithMetrics(metrics =>
             {
                 metrics
-                    // ASP.NET Core instrumentation
-                    .AddAspNetCoreInstrumentation(options =>
-                    {
-                        options.RecordException = true;
-                        options.EnrichWithHttpRequest = (activity, request) =>
-                        {
-                            activity.SetTag("http.request.user_agent", request.Headers.UserAgent.ToString());
-                            activity.SetTag("http.request.content_length", request.ContentLength);
-                        };
-                        options.EnrichWithHttpResponse = (activity, response) =>
-                        {
-                            activity.SetTag("http.response.content_length", response.ContentLength);
-                        };
-                    })
                     // HTTP client instrumentation
                     .AddHttpClientInstrumentation()
                     // Runtime metrics

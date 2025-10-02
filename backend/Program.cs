@@ -427,7 +427,7 @@ app.MapPost("/api/jobs", async (HttpRequest req, SqliteConnection conn) =>
     await ins.ExecuteNonQueryAsync();
     
     OpenTelemetryConfig.JobCreated.Add(1);
-    if (quoted.HasValue) OpenTelemetryConfig.JobQuoteAmount.Record(quoted.Value);
+    if (quoted.HasValue) OpenTelemetryConfig.JobQuoteAmount.Record((double)quoted.Value);
     
     return Results.Ok(new { id, title, status, quotedPrice = quoted });
 });

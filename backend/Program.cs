@@ -220,19 +220,26 @@ var app = builder.Build();
 app.MapGet("/api/health", () => Results.Ok(new { ok = true, timestamp = DateTime.UtcNow, service = "ai-mate-api" }))
    .WithName("HealthMinimal");
 
-// Run database migrations
-using (var scope = app.Services.CreateScope())
+Console.WriteLine("=== Health endpoint registered ===");
+
+// Run database migrations in background after server starts
+_ = Task.Run(async () =>
 {
+    await Task.Delay(2000); // Give server time to start
+    using var scope = app.Services.CreateScope();
     var migrations = scope.ServiceProvider.GetRequiredService<DatabaseMigrations>();
     try
     {
+        Console.WriteLine("Starting database migrations...");
         await migrations.MigrateAsync();
+        Console.WriteLine("✓ Database migrations complete");
     }
     catch (Exception ex)
     {
         Log.Error(ex, "Failed to run database migrations");
+        Console.WriteLine($"⚠ Migration error: {ex.Message}");
     }
-}
+});
 
 // OpenTelemetry API metrics middleware
 app.UseMiddleware<ApiMetricsMiddleware>();

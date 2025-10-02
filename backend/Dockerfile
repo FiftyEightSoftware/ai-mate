@@ -5,12 +5,12 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # Copy csproj and restore as distinct layers
-COPY backend/*.csproj backend/
-RUN dotnet restore backend/*.csproj
+COPY *.csproj ./
+RUN dotnet restore
 
 # Copy everything and build
-COPY backend/ backend/
-RUN dotnet publish backend/*.csproj -c Release -o /app/publish --no-restore
+COPY . ./
+RUN dotnet publish -c Release -o /app/publish --no-restore
 
 # --- Runtime stage ---
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final

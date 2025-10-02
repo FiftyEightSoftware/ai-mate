@@ -215,6 +215,10 @@ builder.Services.AddSingleton<InvoiceRepository>(sp =>
 
 var app = builder.Build();
 
+// Ultra-minimal health check for Render (before any middleware or migrations)
+app.MapGet("/health", () => Results.Ok(new { ok = true, timestamp = DateTime.UtcNow }))
+   .WithName("HealthMinimal");
+
 // Run database migrations
 using (var scope = app.Services.CreateScope())
 {
@@ -262,10 +266,6 @@ app.MapHealthChecks("/api/health", new Microsoft.AspNetCore.Diagnostics.HealthCh
         await context.Response.WriteAsync(result);
     }
 }).WithName("Health");
-
-// Simple health endpoint for quick checks
-app.MapGet("/health", () => Results.Ok(new { ok = true }))
-   .WithName("HealthSimple");
 
 // Metrics endpoint (performance monitoring)
 app.MapGet("/api/metrics", (MetricsCollector metrics, HttpRequest req) =>

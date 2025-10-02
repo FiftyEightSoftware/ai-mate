@@ -16,6 +16,15 @@ Log.Logger = new LoggerConfiguration()
 var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
+// Startup diagnostics
+Console.WriteLine("=== AI Mate Backend Starting ===");
+Console.WriteLine($"Environment: {builder.Environment.EnvironmentName}");
+Console.WriteLine($"ASPNETCORE_URLS: {Environment.GetEnvironmentVariable("ASPNETCORE_URLS")}");
+Console.WriteLine($"PORT: {Environment.GetEnvironmentVariable("PORT")}");
+Console.WriteLine($"REDIS_CONNECTION: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("REDIS_CONNECTION")) ? "Not set" : "Set")}");
+Console.WriteLine($"AIMATE_DB_PASSWORD: {(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AIMATE_DB_PASSWORD")) ? "Not set" : "Set")}");
+Console.WriteLine("================================");
+
 // Add OpenTelemetry instrumentation
 builder.Services.AddOpenTelemetryInstrumentation(builder.Configuration);
 
@@ -68,17 +77,26 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 {
     try
     {
-        redis = ConnectionMultiplexer.Connect(redisConnection);
+        Console.WriteLine($"Attempting Redis connection to: {redisConnection}");
+        var redisConfig = ConfigurationOptions.Parse(redisConnection);
+        redisConfig.ConnectTimeout = 5000; // 5 second timeout
+        redisConfig.SyncTimeout = 5000;
+        redisConfig.AbortOnConnectFail = false; // Don't crash if Redis unavailable
+        redisConfig.ConnectRetry = 3;
+        
+        redis = ConnectionMultiplexer.Connect(redisConfig);
         builder.Services.AddSingleton(redis);
         builder.Services.AddStackExchangeRedisCache(options =>
         {
             options.Configuration = redisConnection;
             options.InstanceName = "AIMate_";
         });
+        Console.WriteLine("✓ Redis connected successfully");
         Log.Information("Redis connected: {Connection}", redisConnection);
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"⚠ Redis connection failed: {ex.Message}");
         Log.Warning(ex, "Redis connection failed, falling back to in-memory cache");
         builder.Services.AddDistributedMemoryCache();
     }
@@ -622,5 +640,10 @@ app.MapPost("/api/dev/reseed", async (SqliteConnection conn, InvoiceRepository r
     }
     return Results.Ok(new { ok = true });
 }).WithDisplayName("Dev-ReSeed");
+
+Console.WriteLine("=== Starting web server ===");
+Console.WriteLine($"Listening on: {Environment.GetEnvironmentVariable("ASPNETCORE_URLS")}");
+Console.WriteLine($"Health check: /api/health");
+Console.WriteLine("===========================");
 
 app.Run();

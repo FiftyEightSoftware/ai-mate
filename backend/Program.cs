@@ -155,11 +155,22 @@ builder.Services.AddSingleton<MetricsCollector>();
 builder.Services.AddSingleton<DatabaseMigrations>();
 
 // Initialize SQLCipher (requires SQLitePCLRaw.bundle_e_sqlcipher package)
-SQLitePCL.Batteries_V2.Init();
+try
+{
+    Console.WriteLine("Initializing SQLCipher...");
+    SQLitePCL.Batteries_V2.Init();
+    Console.WriteLine("✓ SQLCipher initialized");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"⚠ SQLCipher init warning: {ex.Message}");
+    // Continue anyway - may work without explicit init
+}
 
 // Database configuration
 var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
 Directory.CreateDirectory(dataDir);
+Console.WriteLine($"Data directory: {dataDir}");
 var dbPassword = Environment.GetEnvironmentVariable("AIMATE_DB_PASSWORD");
 if (string.IsNullOrWhiteSpace(dbPassword))
 {
@@ -213,10 +224,20 @@ builder.Services.AddSingleton<InvoiceRepository>(sp =>
     }
 });
 
-var app = builder.Build();
-
-Console.WriteLine("=== App built successfully ===");
-Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+Console.WriteLine("Building application...");
+WebApplication app;
+try
+{
+    app = builder.Build();
+    Console.WriteLine("=== App built successfully ===");
+    Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"FATAL: App build failed: {ex.Message}");
+    Console.WriteLine($"Stack: {ex.StackTrace}");
+    throw; // Re-throw to see full error in Render logs
+}
 
 // Ultra-minimal health check for Render (before any middleware or migrations)
 // MUST be at /api/health to match Render's health check configuration

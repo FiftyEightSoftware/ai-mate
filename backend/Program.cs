@@ -215,12 +215,19 @@ builder.Services.AddSingleton<InvoiceRepository>(sp =>
 
 var app = builder.Build();
 
+Console.WriteLine("=== App built successfully ===");
+Console.WriteLine($"Environment: {app.Environment.EnvironmentName}");
+
 // Ultra-minimal health check for Render (before any middleware or migrations)
 // MUST be at /api/health to match Render's health check configuration
-app.MapGet("/api/health", () => Results.Ok(new { ok = true, timestamp = DateTime.UtcNow, service = "ai-mate-api" }))
-   .WithName("HealthMinimal");
+app.MapGet("/api/health", () => 
+{
+    Console.WriteLine("Health check called");
+    return Results.Ok(new { ok = true, timestamp = DateTime.UtcNow, service = "ai-mate-api" });
+})
+.WithName("HealthMinimal");
 
-Console.WriteLine("=== Health endpoint registered ===");
+Console.WriteLine("=== Health endpoint registered at /api/health ===");
 
 // Run database migrations in background after server starts
 _ = Task.Run(async () =>
@@ -241,16 +248,18 @@ _ = Task.Run(async () =>
     }
 });
 
+Console.WriteLine("Adding middleware...");
+
 // OpenTelemetry API metrics middleware
-app.UseMiddleware<ApiMetricsMiddleware>();
+try { app.UseMiddleware<ApiMetricsMiddleware>(); Console.WriteLine("✓ ApiMetricsMiddleware"); } catch (Exception ex) { Console.WriteLine($"✗ ApiMetricsMiddleware: {ex.Message}"); }
 
 // Performance metrics middleware
-app.UseMiddleware<PerformanceMetricsMiddleware>();
+try { app.UseMiddleware<PerformanceMetricsMiddleware>(); Console.WriteLine("✓ PerformanceMetricsMiddleware"); } catch (Exception ex) { Console.WriteLine($"✗ PerformanceMetricsMiddleware: {ex.Message}"); }
 
 // Rate limiting middleware
-app.UseIpRateLimiting();
+try { app.UseIpRateLimiting(); Console.WriteLine("✓ IpRateLimiting"); } catch (Exception ex) { Console.WriteLine($"✗ IpRateLimiting: {ex.Message}"); }
 
-app.UseCors(corsPolicy);
+try { app.UseCors(corsPolicy); Console.WriteLine("✓ CORS"); } catch (Exception ex) { Console.WriteLine($"✗ CORS: {ex.Message}"); }
 
 // Enhanced health checks endpoint (commented out - using minimal version above for faster startup)
 // app.MapHealthChecks("/api/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions

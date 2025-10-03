@@ -118,11 +118,11 @@ public static class OpenTelemetryConfig
                 }
 
                 // OTLP exporter (for production - Jaeger, Prometheus, etc.)
-                if (!string.IsNullOrEmpty(otlpEndpoint))
+                if (!string.IsNullOrWhiteSpace(otlpEndpoint) && Uri.TryCreate(otlpEndpoint, UriKind.Absolute, out var otlpUri))
                 {
                     metrics.AddOtlpExporter(options =>
                     {
-                        options.Endpoint = new Uri(otlpEndpoint);
+                        options.Endpoint = otlpUri;
                     });
                 }
             })
@@ -158,11 +158,11 @@ public static class OpenTelemetryConfig
                 }
 
                 // OTLP exporter (for production)
-                if (!string.IsNullOrEmpty(otlpEndpoint))
+                if (!string.IsNullOrWhiteSpace(otlpEndpoint) && Uri.TryCreate(otlpEndpoint, UriKind.Absolute, out var tracingOtlpUri))
                 {
                     tracing.AddOtlpExporter(options =>
                     {
-                        options.Endpoint = new Uri(otlpEndpoint);
+                        options.Endpoint = tracingOtlpUri;
                     });
                 }
             });

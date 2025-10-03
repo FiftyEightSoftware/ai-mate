@@ -112,6 +112,7 @@ builder.Services.AddSingleton<ICacheService, CacheService>();
 
 // Rate Limiting
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpContextAccessor(); // Required for rate limiting
 builder.Services.Configure<IpRateLimitOptions>(options =>
 {
     options.EnableEndpointRateLimiting = true;

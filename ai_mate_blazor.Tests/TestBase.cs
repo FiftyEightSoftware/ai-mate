@@ -43,9 +43,11 @@ public abstract class TestBase : IDisposable
         // Scoped HttpClient for components that inject HttpClient directly (e.g., Weather)
         Ctx.Services.AddScoped(sp => new HttpClient(new StubHttpMessageHandler()) { BaseAddress = new Uri("http://localhost") });
         // Register any other app services used by components (scoped to align with HttpClient)
+        Ctx.Services.AddScoped<ai_mate_blazor.Services.EncryptionService>();
         Ctx.Services.AddScoped<ai_mate_blazor.Services.VoiceStorageService>();
         Ctx.Services.AddScoped<ai_mate_blazor.Services.VoiceSecurityService>();
         Ctx.Services.AddScoped<ai_mate_blazor.Services.VoiceService>();
+        Ctx.Services.AddScoped<ai_mate_blazor.Services.HmrcValidationService>();
     }
 
     public void Dispose() => Ctx.Dispose();

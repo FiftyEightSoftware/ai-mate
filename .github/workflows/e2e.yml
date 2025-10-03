@@ -34,6 +34,10 @@ jobs:
         env:
           # Ensure simulator auto-open is disabled in CI (Linux)
           IOS_SIM: '0'
+          # Use deployed backend for integration tests
+          BACKEND_URL: 'https://ai-mate-api.onrender.com'
+          # Frontend URL (local static server or deployed)
+          FRONTEND_URL: 'http://localhost:8080'
         run: npm run test:e2e
 
       - name: Upload Playwright report (on failure)

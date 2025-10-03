@@ -11,12 +11,14 @@ namespace api.Tests;
 /// <summary>
 /// Integration tests for the onboarding flow
 /// Tests cover backend API support, data persistence, and validation
-/// Note: These tests require a running backend server on http://localhost:5280
+/// Uses BACKEND_URL environment variable or defaults to production (Render)
+/// Set BACKEND_URL=http://localhost:5280 for local testing
 /// </summary>
 public class OnboardingIntegrationTests
 {
     private readonly HttpClient _client;
-    private const string BackendUrl = "http://localhost:5280";
+    private static readonly string BackendUrl = Environment.GetEnvironmentVariable("BACKEND_URL") 
+        ?? "https://ai-mate-api.onrender.com";
 
     public OnboardingIntegrationTests()
     {

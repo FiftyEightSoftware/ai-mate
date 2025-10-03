@@ -44,6 +44,9 @@ jobs:
         run: dotnet test "ai_mate_blazor.Tests/ai_mate_blazor.Tests.csproj" --no-build -c Release --logger "trx;LogFileName=blazor.trx" --collect:"XPlat Code Coverage"
 
       - name: Test API
+        env:
+          # Use deployed backend for integration tests
+          BACKEND_URL: 'https://ai-mate-api.onrender.com'
         run: dotnet test "api.Tests/api.Tests.csproj" --no-build -c Release --logger "trx;LogFileName=api.trx" --collect:"XPlat Code Coverage"
 
       - name: Install ReportGenerator

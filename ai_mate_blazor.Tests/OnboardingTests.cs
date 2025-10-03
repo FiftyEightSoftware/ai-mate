@@ -3,6 +3,7 @@ using Xunit;
 using ai_mate_blazor.Pages;
 using ai_mate_blazor.Services;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Http;
 
 namespace ai_mate_blazor.Tests;
 
